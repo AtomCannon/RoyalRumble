@@ -1,0 +1,36 @@
+// Hats. Head fit box (128,128)-(384,384). Top of head y=128. Hats mostly live above y=200.
+(function () {
+  const D = P.draw, R = P.items.register;
+  const H = (id, name, draw) => R('hat', { id, name, draw });
+  const c = (ch) => ch.hat.color, c2 = (ch) => ch.hat.color2;
+  H('cap', 'Ball Cap', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 200, 135, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, c(ch)); D.rr(ctx, 300, 180, 190, 40, 14, c(ch)); D.circle(ctx, 256, 70, 16, c2(ch)); });
+  H('backcap', 'Backwards Cap', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 200, 135, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, c(ch)); D.rr(ctx, 20, 180, 190, 40, 14, c(ch)); D.rect(ctx, 236, 150, 40, 30, c2(ch)); });
+  H('tophat', 'Top Hat', (ctx, ch) => { D.rect(ctx, 150, 0, 212, 190, c(ch)); D.rr(ctx, 100, 170, 312, 40, 14, c(ch)); D.rect(ctx, 150, 140, 212, 30, c2(ch), 0); });
+  H('cowboy', 'Cowboy Hat', (ctx, ch) => { ctx.beginPath(); ctx.moveTo(30, 190); ctx.quadraticCurveTo(256, 260, 482, 190); ctx.quadraticCurveTo(470, 240, 400, 220); ctx.lineTo(112, 220); ctx.quadraticCurveTo(42, 240, 30, 190); ctx.closePath(); D.fs(ctx, c(ch)); D.rr(ctx, 160, 50, 192, 170, 40, c(ch)); D.rect(ctx, 160, 175, 192, 24, c2(ch), 0); });
+  H('crown', 'Crown', (ctx, ch) => { D.poly(ctx, [[140, 200], [140, 90], [200, 150], [256, 50], [312, 150], [372, 90], [372, 200]], '#ffd23f'); D.circle(ctx, 256, 150, 18, '#e33', 5); D.circle(ctx, 180, 170, 14, '#3bf', 5); D.circle(ctx, 332, 170, 14, '#3f6', 5); });
+  H('beanie', 'Beanie', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 210, 140, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, c(ch)); D.rr(ctx, 110, 190, 292, 50, 10, c2(ch)); D.circle(ctx, 256, 66, 30, c2(ch)); });
+  H('chef', 'Chef Hat', (ctx, ch) => { D.circle(ctx, 190, 90, 60, '#fff'); D.circle(ctx, 322, 90, 60, '#fff'); D.circle(ctx, 256, 60, 70, '#fff'); D.rect(ctx, 150, 100, 212, 110, '#fff'); });
+  H('viking', 'Viking Helmet', (ctx, ch) => { D.poly(ctx, [[100, 200], [60, 60], [140, 150]], '#f4e4c1'); D.poly(ctx, [[412, 200], [452, 60], [372, 150]], '#f4e4c1'); ctx.beginPath(); ctx.arc(256, 220, 138, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, '#9aa5b1'); D.rect(ctx, 118, 200, 276, 30, '#7a8590'); });
+  H('propeller', 'Propeller Beanie', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 215, 130, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, c(ch)); for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(256, 215); ctx.arc(256, 215, 130, Math.PI + Math.PI * i / 4, Math.PI + Math.PI * (i + .5) / 4); ctx.closePath(); D.fs(ctx, c2(ch), 0); } D.line(ctx, 256, 85, 256, 50, 10); D.ellipse(ctx, 256, 50, 110, 12, '#e33'); });
+  H('cone', 'Traffic Cone', (ctx, ch) => { D.poly(ctx, [[256, -30], [330, 200], [182, 200]], '#ff7a00'); D.rect(ctx, 120, 195, 272, 30, '#ff7a00'); D.rect(ctx, 215, 100, 82, 30, '#fff', 0); });
+  H('bucket', 'Bucket (Actual Bucket)', (ctx, ch) => { D.poly(ctx, [[130, 60], [382, 60], [400, 230], [112, 230]], '#8aa0b8'); D.rect(ctx, 122, 40, 268, 34, '#8aa0b8'); });
+  H('sombrero', 'Sombrero', (ctx, ch) => { D.ellipse(ctx, 256, 200, 250, 60, c(ch)); D.ellipse(ctx, 256, 200, 250, 60, null, 0); D.poly(ctx, [[256, 30], [340, 200], [172, 200]], c(ch)); D.line(ctx, 200, 170, 312, 170, 12, c2(ch)); });
+  H('party', 'Party Hat', (ctx, ch) => { D.poly(ctx, [[256, -10], [340, 200], [172, 200]], c(ch)); D.circle(ctx, 256, -10, 22, c2(ch)); D.line(ctx, 200, 130, 300, 100, 12, c2(ch)); });
+  H('halo', 'Halo', (ctx, ch) => { D.ellipse(ctx, 256, 80, 110, 28, '#ffe14d'); D.ellipse(ctx, 256, 80, 70, 14, '#fff8', 0); });
+  H('horns', 'Devil Horns', (ctx, ch) => { D.poly(ctx, [[150, 190], [110, 60], [200, 140]], '#d22'); D.poly(ctx, [[362, 190], [402, 60], [312, 140]], '#d22'); });
+  H('fez', 'Fez', (ctx, ch) => { D.poly(ctx, [[160, 200], [180, 60], [332, 60], [352, 200]], '#a0142a'); D.line(ctx, 300, 60, 380, 120, 8); D.circle(ctx, 380, 120, 12, D.INK, 0); });
+  H('tinfoil', 'Tinfoil Hat', (ctx, ch) => { D.poly(ctx, [[256, 20], [300, 120], [380, 200], [132, 200], [212, 120]], '#c8d0d8'); D.line(ctx, 256, 40, 250, 180, 5, '#eee'); });
+  H('colander', 'Colander', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 210, 145, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, '#c8d0d8'); for (let i = 0; i < 12; i++) D.circle(ctx, 180 + (i % 4) * 50, 110 + Math.floor(i / 4) * 32, 8, '#777', 0); D.rr(ctx, 60, 195, 60, 20, 8, '#c8d0d8'); D.rr(ctx, 392, 195, 60, 20, 8, '#c8d0d8'); });
+  H('tp', 'Toilet Paper Roll', (ctx, ch) => { D.rect(ctx, 150, 30, 212, 180, '#fff'); D.ellipse(ctx, 256, 30, 106, 30, '#fff'); D.ellipse(ctx, 256, 30, 40, 12, '#c9b', 6); D.poly(ctx, [[362, 150], [420, 300], [400, 300], [350, 200]], '#fff'); });
+  H('wizard', 'Wizard Hat', (ctx, ch) => { D.ellipse(ctx, 256, 200, 190, 40, c(ch)); D.poly(ctx, [[256, -40], [350, 200], [162, 200]], c(ch)); D.star(ctx, 256, 120, 26, 12, 5, '#ffe14d', 4); });
+  H('football', 'Football Helmet', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 240, 150, Math.PI * 0.95, Math.PI * 2.05); ctx.closePath(); D.fs(ctx, c(ch)); D.rect(ctx, 106, 220, 300, 40, c(ch)); D.line(ctx, 300, 260, 420, 250, 12, '#ddd'); D.line(ctx, 300, 300, 420, 290, 12, '#ddd'); D.line(ctx, 410, 240, 410, 300, 12, '#ddd'); });
+  H('fishbowl', 'Fishbowl', (ctx, ch) => { D.circle(ctx, 256, 220, 160, '#8ad4ff55'); D.circle(ctx, 256, 220, 160, null); D.ellipse(ctx, 200, 200, 34, 18, '#ff8a00', 6); D.poly(ctx, [[166, 200], [136, 180], [136, 220]], '#ff8a00', 6); D.circle(ctx, 300, 130, 8, '#fff', 3); D.circle(ctx, 330, 100, 6, '#fff', 3); });
+  H('headband', 'Headband', (ctx, ch) => { D.rect(ctx, 118, 175, 276, 34, c(ch)); D.poly(ctx, [[390, 180], [470, 160], [460, 200], [480, 230], [390, 210]], c(ch)); });
+  H('bandana', 'Bandana', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 215, 136, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, c(ch)); D.rect(ctx, 118, 200, 276, 30, c(ch)); D.poly(ctx, [[130, 210], [60, 300], [90, 310], [150, 240]], c(ch)); });
+  H('paperbag', 'Paper Bag (Ashamed)', (ctx, ch) => { D.rect(ctx, 118, 90, 276, 320, '#d9b27c'); D.circle(ctx, 210, 240, 18, '#333', 0); D.circle(ctx, 302, 240, 18, '#333', 0); D.line(ctx, 220, 320, 292, 320, 10); });
+  H('graduation', 'Graduation Cap', (ctx, ch) => { D.rect(ctx, 160, 150, 192, 60, '#222'); D.poly(ctx, [[256, 80], [430, 140], [256, 200], [82, 140]], '#222'); D.line(ctx, 256, 140, 340, 200, 8, '#ffd23f'); D.circle(ctx, 340, 205, 12, '#ffd23f', 0); });
+  H('pot', 'Cooking Pot', (ctx, ch) => { D.rr(ctx, 130, 60, 252, 160, 20, '#666'); D.rect(ctx, 120, 50, 272, 24, '#888'); D.rr(ctx, 70, 100, 70, 24, 10, '#888'); D.rr(ctx, 372, 100, 70, 24, 10, '#888'); });
+  H('hardhat', 'Hard Hat', (ctx, ch) => { ctx.beginPath(); ctx.arc(256, 210, 135, Math.PI, Math.PI * 2); ctx.closePath(); D.fs(ctx, '#ffcc00'); D.rr(ctx, 90, 195, 332, 32, 12, '#ffcc00'); D.rect(ctx, 236, 80, 40, 120, '#e6b800', 0); });
+  H('antenna', 'Robot Antenna', (ctx, ch) => { D.line(ctx, 256, 130, 256, 30, 12); D.circle(ctx, 256, 30, 20, '#e33'); });
+  H('flower', 'Flower', (ctx, ch) => { for (let i = 0; i < 6; i++) { const a = Math.PI * 2 * i / 6; D.circle(ctx, 360 + Math.cos(a) * 34, 150 + Math.sin(a) * 34, 24, c(ch), 6); } D.circle(ctx, 360, 150, 22, '#ffe14d', 6); });
+})();

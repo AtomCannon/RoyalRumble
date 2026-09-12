@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PUNCHMA — Royal Rumble of Idiots</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👊</text></svg>">
+</head>
+<body>
+<header>
+  <h1 onclick="P.app.show('roster')">PUNCH<span>MA</span></h1>
+  <nav>
+    <button data-screen="roster" onclick="P.app.show('roster')">Roster</button>
+    <button data-screen="builder" onclick="P.builder.open(null)">+ New Fighter</button>
+    <div class="audio">
+      <label title="Music">🎵 <input type="range" id="vol-music" min="0" max="1" step="0.05"></label>
+      <label title="Sound effects">💥 <input type="range" id="vol-sfx" min="0" max="1" step="0.05"></label>
+      <label title="Announcer voice (uses your browser's text-to-speech)">📣 <input type="checkbox" id="voice-on"></label>
+    </div>
+  </nav>
+</header>
+
+<!-- ROSTER -->
+<section id="screen-roster" class="screen on">
+  <div class="toolbar">
+    <button class="btn primary" onclick="P.builder.open(null)">+ New Fighter</button>
+    <button class="btn" onclick="P.app.upsert(P.char.random()); P.app.renderRoster();">🎲 Random Idiot</button>
+    <button class="btn" onclick="P.app.selectAll(true)">Select all</button>
+    <button class="btn" onclick="P.app.selectAll(false)">Select none</button>
+    <button class="btn" onclick="P.app.exportRoster()">⬇ Export roster</button>
+    <label class="btn">⬆ Import roster <input type="file" accept="application/json" hidden onchange="P.app.importRoster(event)"></label>
+  </div>
+  <div id="roster" class="grid"></div>
+  <div class="setup">
+    <h2>Rumble Setup</h2>
+    <div class="setrow">
+      <label>Entry interval <input type="range" id="set-interval" min="4" max="40" step="1" value="12"> <span id="set-interval-v">12s</span></label>
+      <label>Chaos (lucky events)
+        <select id="set-chaos"><option value="0.4">Mild</option><option value="1" selected>Normal</option><option value="2">Chaotic</option><option value="4">Why Would You Do This</option></select>
+      </label>
+      <label>Speed <select id="set-speed"><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
+    </div>
+    <p class="muted">Everyone has identical stats. Order is random. Nobody has an advantage. Only luck, chaos, and bad decisions.</p>
+    <button id="start-btn" class="btn primary huge" onclick="P.app.startRumble()">START PUNCHMA</button>
+  </div>
+</section>
+
+<!-- BUILDER -->
+<section id="screen-builder" class="screen">
+  <div class="builder">
+    <div class="b-left">
+      <h2 id="b-title">Unnamed</h2>
+      <canvas id="preview" width="420" height="520"></canvas>
+      <div class="btnrow anims">
+        <button class="btn small" onclick="P.builder.setAnim('idle')">Idle</button>
+        <button class="btn small" onclick="P.builder.setAnim('walk')">Walk</button>
+        <button class="btn small" onclick="P.builder.setAnim('punch')">Punch</button>
+        <button class="btn small" onclick="P.builder.setAnim('taunt')">Taunt</button>
+        <button class="btn small" onclick="P.builder.setAnim('flex')">Flex</button>
+        <button class="btn small" onclick="P.builder.setAnim('dance')">Dance</button>
+        <button class="btn small" onclick="P.builder.setAnim('hurt')">Hurt</button>
+        <button class="btn small" onclick="P.builder.setAnim('toot')">Toot</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="P.builder.save()">💾 Save fighter</button>
+        <button class="btn" onclick="P.builder.randomize()">🎲 Randomize everything</button>
+        <button class="btn" onclick="P.builder.cancel()">Cancel</button>
+      </div>
+    </div>
+    <div class="b-right" id="b-controls"></div>
+  </div>
+</section>
+
+<!-- RUMBLE -->
+<section id="screen-rumble" class="screen">
+  <div class="rumble">
+    <div class="ringwrap">
+      <canvas id="ring" width="1280" height="720"></canvas>
+      <div class="ringbar">
+        <span id="hud-next" class="next"></span>
+        <span class="spacer"></span>
+        <button class="btn small" onclick="P.rumble.paused=!P.rumble.paused">⏯ Pause</button>
+        <button class="btn small" onclick="P.rumble.speed=1">1x</button>
+        <button class="btn small" onclick="P.rumble.speed=2">2x</button>
+        <button class="btn small" onclick="P.rumble.speed=4">4x</button>
+        <button class="btn small" onclick="P.rumble.spawn()" title="Skip the wait for the next entrant">⏭ Next now</button>
+        <button class="btn small danger" onclick="P.app.leaveRumble()">✕ Quit</button>
+      </div>
+    </div>
+    <aside class="side">
+      <h3>In the ring</h3>
+      <div id="hud-list"></div>
+      <h3>Commentary</h3>
+      <div id="feed" class="feed"></div>
+    </aside>
+  </div>
+  <div id="winner-overlay" class="overlay">
+    <div class="winbox">
+      <div class="winhead">WINNER</div>
+      <canvas id="winner-canvas" width="260" height="300"></canvas>
+      <div id="winner-name" class="winname"></div>
+      <div id="winner-tag" class="wintag"></div>
+      <div id="winner-stats" class="winstats"></div>
+      <div class="btnrow">
+        <button class="btn primary" onclick="P.app.rematch()">🔁 Rematch</button>
+        <button class="btn" onclick="P.app.leaveRumble()">Back to roster</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="js/util.js"></script>
+<script src="js/data/taglines.js"></script>
+<script src="js/data/personas.js"></script>
+<script src="js/data/commentary.js"></script>
+<script src="js/items/core.js"></script>
+<script src="js/items/hair.js"></script>
+<script src="js/items/hats.js"></script>
+<script src="js/items/faces.js"></script>
+<script src="js/items/clothes.js"></script>
+<script src="js/items/extras.js"></script>
+<script src="js/items/manifest.js"></script>
+<script src="js/character.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/announcer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/rumble.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
