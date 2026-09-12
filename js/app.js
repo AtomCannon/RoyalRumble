@@ -251,11 +251,31 @@ window.P = window.P || {};
     ];
   };
 
+  // Rosters saved before default/custom were split have no builtin flag, so the shipped cast showed up under
+  // "My fighters". Match them back by id or by name and hand them their default identity again.
+  App.migrate = (saved) => {
+    const defs = App.defaults();
+    const byId = new Map(defs.map(d => [d.id, d])), byName = new Map(defs.map(d => [d.name.toLowerCase(), d]));
+    const out = [], claimed = new Set();
+    for (const raw of saved) {
+      const ch = C.normalize(raw);
+      if (raw.builtin === true) { ch.builtin = true; claimed.add(ch.id); out.push(ch); continue; }
+      if (raw.builtin === false) { ch.builtin = false; out.push(ch); continue; }
+      const d = byId.get(ch.id) || byName.get(String(ch.name || '').toLowerCase());
+      if (d && !claimed.has(d.id)) { ch.builtin = true; ch.id = d.id; claimed.add(d.id); } else ch.builtin = false;
+      out.push(ch);
+    }
+    for (const d of defs) if (!claimed.has(d.id)) out.push(d); // anything the save was missing
+    return out;
+  };
+
   App.init = () => {
     P.sponsors.load();
-    App.roster = (U.load('punchma.roster', null) || App.defaults()).map(c => { const ch = C.normalize(c); if (c.builtin) ch.builtin = true; return ch; });
+    const saved = U.load('punchma.roster', null);
+    App.roster = saved ? App.migrate(saved) : App.defaults();
+    if (saved) App.saveRoster();
     App.selected = new Set(App.roster.map(c => c.id));
-    if (!U.load('punchma.roster', null)) App.saveRoster();
+    if (!saved) App.saveRoster();
     if (sessionStorage.getItem('punchma.admin') === '1') P.admin.on = true;
     App.audioUI();
     const iv = document.getElementById('set-interval'); if (iv) iv.oninput = (e) => document.getElementById('set-interval-v').textContent = e.target.value + 's';

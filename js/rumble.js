@@ -44,7 +44,7 @@ window.P = window.P || {};
       ctx.drawImage(img, x + 10, 310, 58, 58);
       D.text(ctx, (s.name || '').toUpperCase().slice(0, 26), x + span / 2 + 16, 342, 26, s.color2 || '#ffd23f');
     });
-    if (scr.length) { const s = scr[Math.floor(Rm.t / 7) % scr.length], img = P.sponsors.logoImage(s); D.rect(ctx, -620, 112, 360, 132, '#05070f', 5); if (img) ctx.drawImage(img, -600, 118, 118, 118); if (s) { D.text(ctx, (s.name || '').toUpperCase().slice(0, 16), -350, 160, 22, '#ffd23f'); D.text(ctx, (s.tagline || '').slice(0, 26), -350, 196, 14, '#fff', 'Georgia, serif'); } }
+    if (scr.length) { const s = scr[Math.abs(Math.floor((Rm.t || 0) / 7)) % scr.length], img = P.sponsors.logoImage(s); D.rect(ctx, -620, 112, 360, 132, '#05070f', 5); if (img) ctx.drawImage(img, -600, 118, 118, 118); if (s) { D.text(ctx, (s.name || '').toUpperCase().slice(0, 16), -350, 160, 22, '#ffd23f'); D.text(ctx, (s.tagline || '').slice(0, 26), -350, 196, 14, '#fff', 'Georgia, serif'); } }
   };
 
   // ---------------- pre-show ----------------
@@ -142,14 +142,23 @@ window.P = window.P || {};
     f.script = Rm.entranceScript(f); f.si = 0; f.stepT = 0;
     Rm.fighters.push(f); Rm.entered++;
     // ceremony: lights down, camera to the entrance, everyone in the ring stops and watches
-    Rm.hold = true; Rm.view = 'entrance'; Rm.entrant = f; Rm.card = { f, t: 0 };
+    Rm.hold = true; Rm.view = 'entrance'; Rm.entrant = f; Rm.card = { f, t: 0 }; Rm.ceremonyT = 0;
+    f.introDone = false; f.walkDone = false;
     A.sfx('buzzer'); setTimeout(() => { if (Rm.running && Rm.entrant === f) A.playCharSong(f.ch); }, 700);
     V.say(Rm.script && Rm.script.intros[f.ch.id] ? Rm.script.intros[f.ch.id] : P.data.ANN.intro(f.ch, f.n), { role: 'ann', priority: 3 })
-      .then(() => { if (!Rm.running) return; if (V.vo(f.ch, 'entrance', { force: true })) return; if (f.ch.catchphrase) return V.say(f.ch.catchphrase, { role: 'fighter', priority: 3, pitch: f.ch.voice.pitch, rate: f.ch.voice.rate }); })
-      .then(() => { if (!Rm.running) return; const lines = P.data.EX.entrance[f.ch.persona] || P.data.EX.entrance.generic; V.exchange(U.pick(lines).map(([who, t]) => [who, U.fmt(t, { name: f.ch.name, tag: P.char.tagline(f.ch) })]), { priority: 2, maxAge: 20 }); });
+      .then(() => { if (!Rm.running) return; const clip = V.vo(f.ch, 'entrance', { force: true }); if (clip) return clip; if (f.ch.catchphrase) return V.say(f.ch.catchphrase, { role: 'fighter', priority: 3, pitch: f.ch.voice.pitch, rate: f.ch.voice.rate }); })
+      .then(() => { f.introDone = true; if (!Rm.running) return; const lines = P.data.EX.entrance[f.ch.persona] || P.data.EX.entrance.generic; V.exchange(U.pick(lines).map(([who, t]) => [who, U.fmt(t, { name: f.ch.name, tag: P.char.tagline(f.ch) })]), { priority: 2, maxAge: 20 }); });
     Rm.updateHud();
   };
+  // The walk-out is over only when the fighter is in the ring AND the ring announcer has finished with them.
+  Rm.ceremonyDone = (f) => f.walkDone && (f.introDone || Rm.ceremonyT > 45);
+  Rm.tryEndCeremony = (dt) => {
+    const f = Rm.entrant; if (!f || !Rm.hold) return;
+    Rm.ceremonyT += dt;
+    if (Rm.ceremonyDone(f)) Rm.endCeremony(f);
+  };
   Rm.endCeremony = (f) => {
+    if (!Rm.hold) return;
     Rm.hold = false; Rm.view = 'ring'; Rm.entrant = null; Rm.card = null; Rm.nextEntry = Rm.settings.interval;
     A.stopSong(); A.sfx('ding');
     for (const o of Rm.fighters) if (o !== f && isActive(o)) { o.mode = 'roam'; o.modeT = U.rand(1, 4); }
@@ -291,6 +300,7 @@ window.P = window.P || {};
     for (const k in Rm.globals) Rm.globals[k] = Math.max(0, Rm.globals[k] - dt);
     if (!Rm.hold && !(Rm.script && Rm.script.active)) { Rm.luckyT -= dt; if (Rm.luckyT <= 0 && active().length >= 2) { lucky(); Rm.luckyT = (10 + U.rand(0, 12)) / Rm.settings.chaos; } }
     Rm.chatterT -= dt; if (Rm.chatterT <= 0 && !Rm.hold && V.idle()) { const a = active()[0]; ex('chatter', a, a, null, { priority: 1, maxAge: 5 }); Rm.chatterT = U.rand(18, 35); }
+    Rm.tryEndCeremony(dt);
     scriptStep(dt);
     Rm.dim += ((Rm.hold ? 0.55 : 0) - Rm.dim) * Math.min(1, dt * 2.5);
     if (Rm.card) Rm.card.t += dt;
@@ -302,7 +312,7 @@ window.P = window.P || {};
       const speedMul = (f.buffs.beer > 0 ? 1.7 : 1) * (slide ? 1.5 : 1);
       switch (f.state) {
         case 'entering': {
-          const step = f.script[f.si]; if (!step) { f.state = 'idle'; f.st = 0; Rm.endCeremony(f); break; }
+          const step = f.script[f.si]; if (!step) { f.state = 'idle'; f.st = 0; f.walkDone = true; break; }
           f.stepT += dt;
           if (step.type === 'walk') {
             setAnim(f, step.anim); f.facing = step.back ? -1 : 1; if (step.alpha) f.alpha = step.alpha;
@@ -319,7 +329,7 @@ window.P = window.P || {};
           } else if (step.type === 'enter') {
             const durs = { jump: 1.0, dive: 0.9, climb: 1.9, trip: 1.2, shoved: 1.0, float: 1.6, crawl: 1.4, teleport: 1.4 }; const dur = durs[step.style] || 1;
             const p = U.clamp(f.stepT / dur, 0, 1);
-            if (f.stepT === dt) { A.sfx(step.style === 'teleport' ? 'magic' : step.style === 'float' ? 'ooh' : 'whoosh'); Rm.view = 'ring'; }
+            if (f.stepT === dt) A.sfx(step.style === 'teleport' ? 'magic' : step.style === 'float' ? 'ooh' : 'whoosh');
             f.x = U.lerp(ENTRY_X, INSIDE_X, p); f.z = U.lerp(ENTRY_Z, 0.55, p); f.facing = 1;
             const arc = { jump: 170, dive: 160, climb: 70, trip: 140, shoved: 180, float: 40, crawl: 150, teleport: 0 }[step.style];
             f.jump = -Math.sin(p * Math.PI) * arc;
@@ -327,7 +337,7 @@ window.P = window.P || {};
             if (p >= 1) {
               f.jump = 0; f.alpha = f.ch.persona === 'ghost' ? 0.85 : 1; f.si++; f.stepT = 0; f.state = 'idle'; f.st = 0; f.cool = 1.5; f.mode = 'roam'; f.modeT = U.rand(2, 5); A.sfx('thud'); burst(f.x, footY(f.z), '#ccc', 10);
               if (['dive', 'trip', 'shoved'].includes(step.style)) { f.state = 'down'; f.timer = 1.0; f.lying = 1; }
-              Rm.endCeremony(f);
+              f.walkDone = true;
             }
           }
           break;
@@ -352,12 +362,16 @@ window.P = window.P || {};
               f.state = 'idle'; setAnim(f, 'ready');
               if (f.cool <= 0) { f.state = 'windup'; f.st = 0; }
             }
+          } else if (Rm.hold && f !== Rm.entrant) { // somebody is walking out: stop, turn, watch
+            f.state = 'roam'; f.facing = -1; setAnim(f, 'ready'); f.wander = null; f.pause = 0;
+          } else if (Rm.hold) { // the entrant, in the ring, still being announced
+            f.state = 'roam'; f.facing = 1; f.wander = null;
+            setAnim(f, ['showboat', 'diva', 'zoomer'].includes(f.ch.persona) ? 'taunt' : f.ch.persona === 'coward' ? 'cower' : f.ch.persona === 'maniac' ? 'yell' : 'ready');
           } else { // roaming: wander to a spot, stand around, look at people, taunt
             f.state = 'roam';
             if (f.pause > 0) {
               f.pause -= dt;
-              if (Rm.hold) { f.facing = -1; setAnim(f, f.pauseAnim === 'taunt' ? 'idle' : f.pauseAnim); }
-              else { setAnim(f, f.pauseAnim); if (f.pauseAnim === 'ready' && os.length) { const n = os[0]; f.facing = n.x >= f.x ? 1 : -1; } }
+              setAnim(f, f.pauseAnim); if (f.pauseAnim === 'ready' && os.length) { const n = os[0]; f.facing = n.x >= f.x ? 1 : -1; }
               if (f.pause <= 0) f.wander = null;
             } else {
               if (!f.wander) { const b = ringX(0.5); f.wander = { x: U.rand(b.left + 40, b.right - 40), z: U.rand(0.1, 0.9) }; }
@@ -401,7 +415,7 @@ window.P = window.P || {};
     }
     // camera
     const cam = Rm.cam; let tx = 920, ty = 430, tz = 0.8;
-    if (Rm.view === 'entrance' && Rm.entrant) { tx = U.clamp(Rm.entrant.x + 140, -330, 760); ty = 470; tz = 1.25; }
+    if (Rm.hold && Rm.entrant) { const e = Rm.entrant; tx = U.clamp(e.x + 90, -300, 1120); ty = footY(e.z) - 130 + (e.jump || 0) * 0.45; tz = e.x < ENTRY_X ? 1.15 : 1.0; }
     if (Rm.ended && Rm.winner) { tx = Rm.winner.x; ty = 450; tz = 1.35; }
     const k = Math.min(1, dt * 2.2); cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.zoom += (tz - cam.zoom) * k;
     if (Rm.frameCount % 20 === 0) Rm.updateHud();
@@ -426,7 +440,7 @@ window.P = window.P || {};
       const buffs = Object.keys(f.buffs).filter(k => f.buffs[k] > 0).map(k => ({ chair: '🪑', rage: '😡', blind: '🕶️', beer: '🍺', ghost: '👻', shield: '🛡️' }[k] || '✨')).join('');
       return `<div class="chip${out ? ' out' : ''}${f.state === 'winner' ? ' win' : ''}"><span class="hname">${U.esc(f.ch.name)}</span>${buffs}<span class="hbar"><i style="width:${pct}%;background:${pct > 50 ? '#5f5' : pct > 25 ? '#ffd23f' : '#f55'}"></i></span></div>`;
     }).join('') || '<span class="muted">Waiting for the first fighter...</span>';
-    const nx = document.getElementById('hud-next'); if (nx) nx.textContent = Rm.hold ? `Entrant ${Rm.entered} of ${Rm.total} is walking out` : Rm.queue.length ? `Next entrant in ${Math.max(0, Math.ceil(Rm.nextEntry))}s (${Rm.entered}/${Rm.total})` : Rm.ended ? 'IT\'S OVER' : `All ${Rm.total} in the ring. Last one standing wins.`;
+    const nx = document.getElementById('hud-next'); if (nx) nx.textContent = Rm.hold ? `Entrant ${Rm.entered} of ${Rm.total}: ${Rm.entrant ? Rm.entrant.ch.name : ''} is walking out` : Rm.queue.length ? `Next entrant in ${Math.max(0, Math.ceil(Rm.nextEntry))}s (${Rm.entered}/${Rm.total})` : Rm.ended ? 'IT\'S OVER' : `All ${Rm.total} in the ring. Last one standing wins.`;
     if (nx && Rm.pre) nx.textContent = 'Pre-show';
   };
 

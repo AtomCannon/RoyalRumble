@@ -109,10 +109,16 @@ window.P = window.P || {};
       }
     }
     // Build a canvas per part from the label map, plus a disc of original pixels around its parent joint so bends stay filled.
-    const joints = { armUpL: [pt.shL, lw * 0.5], armLoL: [pt.elL, lw * 0.5], armUpR: [pt.shR, lw * 0.5], armLoR: [pt.elR, lw * 0.5], legL: [pt.hipL, lw * 0.55], legR: [pt.hipR, lw * 0.55], head: [pt.neck, lw * 0.4] };
+    // A joint disc copies a little of the neighbouring part in, so a bent joint has no hole. Only pull from the
+    // parts that actually meet there: a forearm may borrow from its upper arm, never from the torso.
+    const joints = {
+      armLoL: [pt.elL, lw * 0.55, ['armLoL', 'armUpL']], armLoR: [pt.elR, lw * 0.55, ['armLoR', 'armUpR']],
+      head: [pt.neck, lw * 0.45, ['head', 'torso']],
+    };
     const mkPart = (id, anchor) => {
       let [x0, y0, x1, y1] = bx[id];
       const j = joints[id]; if (j) { x0 = Math.min(x0, j[0].x - j[1]); y0 = Math.min(y0, j[0].y - j[1]); x1 = Math.max(x1, j[0].x + j[1]); y1 = Math.max(y1, j[0].y + j[1]); }
+      const allow = j ? j[2].map(n => IDS.indexOf(n)) : null;
       if (x1 < x0) { x0 = y0 = 0; x1 = y1 = 1; }
       x0 = Math.max(0, Math.floor(x0) - 1); y0 = Math.max(0, Math.floor(y0) - 1); x1 = Math.min(W - 1, Math.ceil(x1) + 1); y1 = Math.min(H - 1, Math.ceil(y1) + 1);
       const pw = x1 - x0 + 1, ph = y1 - y0 + 1;
@@ -122,7 +128,7 @@ window.P = window.P || {};
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const si = (y * W + x) * 4; if (data[si + 3] <= 24) continue;
         let take = label[y * W + x] === mine;
-        if (!take && j) { const dx = x - j[0].x, dy = y - j[0].y; if (dx * dx + dy * dy <= jr2) take = true; }
+        if (!take && j && allow.includes(label[y * W + x])) { const dx = x - j[0].x, dy = y - j[0].y; if (dx * dx + dy * dy <= jr2) take = true; }
         if (!take) continue;
         const di = ((y - y0) * pw + (x - x0)) * 4;
         od[di] = data[si]; od[di + 1] = data[si + 1]; od[di + 2] = data[si + 2]; od[di + 3] = data[si + 3];
@@ -154,13 +160,16 @@ window.P = window.P || {};
     if (pose.shadow !== false && !pose.lying) { ctx.save(); ctx.globalAlpha *= 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(0, 2, rig.width * 0.5 + 8, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     P.render.bodyTransform(ctx, pose, { totalH: rig.totalH, torsoW: rig.width });
     const drawPart = (p, ax, ay, rot) => { ctx.save(); ctx.translate(ax, ay); ctx.rotate(rot); ctx.scale(k, k); ctx.drawImage(p.cv, p.ox - p.ax, p.oy - p.ay); ctx.restore(); };
+    // A bone drawn at image angle r must end up at pose angle a. Canvas rotate() turns the other way
+    // from our angle convention (0 = straight down, increasing = toward the facing side), so the
+    // rotation to apply is (r - a), not (a - r).
     const limb = (up, lo, sh, aUp, bend) => {
-      const [sx, sy] = u(sh); drawPart(up, sx, sy, aUp - up.restA);
+      const [sx, sy] = u(sh); drawPart(up, sx, sy, up.restA - aUp);
       const ex = sx + Math.sin(aUp) * up.len * k, ey = sy + Math.cos(aUp) * up.len * k;
-      const aLo = aUp + bend; drawPart(lo, ex, ey, aLo - lo.restA);
+      const aLo = aUp + bend; drawPart(lo, ex, ey, lo.restA - aLo);
       return [ex + Math.sin(aLo) * lo.len * k, ey + Math.cos(aLo) * lo.len * k];
     };
-    const leg = (p, hip, a) => { const [hx, hy] = u(hip); drawPart(p, hx, hy, a - p.restA); };
+    const leg = (p, hip, a) => { const [hx, hy] = u(hip); drawPart(p, hx, hy, p.restA - a); };
     if (ch.extra.id !== 'none') { const it = P.items.get('extra', ch.extra.id); if (it.layer === 'back') D.inBox(ctx, { cx: 0, cy: -rig.totalH * 0.55, w: rig.width * 1.6, h: rig.totalH * 0.5 }, (c) => it.draw(c, ch, pose)); }
     limb(P_.armUpL, P_.armLoL, pt.shL, pose.armB, pose.bendB);
     leg(P_.legL, pt.hipL, pose.legB); leg(P_.legR, pt.hipR, pose.legF);

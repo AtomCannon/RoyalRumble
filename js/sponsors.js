@@ -47,6 +47,7 @@ window.P = window.P || {};
   };
   S.cache = {};
   S.logoImage = (sp) => { // cached bitmap so the mat logo can be warped row by row
+    if (!sp) return null;
     const key = sp.id + '|' + sp.shape + sp.color + sp.color2 + sp.text + sp.name + (sp.logo ? sp.logo.length : 0);
     if (S.cache[key]) return S.cache[key];
     if (sp.logo && !P.items.img(sp.logo)) return null; // uploaded logo still decoding
@@ -92,18 +93,24 @@ window.P = window.P || {};
     }
   };
   S.openEditor = (sp) => { S.editing = sp ? U.deep(sp) : S.blank(); S.newOne = !sp; P.app.show('sponsor-edit'); S.renderEditor(); };
+  S.drawPreview = () => {
+    const sp = S.editing, prev = document.getElementById('sponsor-preview'); if (!sp || !prev) return;
+    const ctx = prev.getContext('2d');
+    ctx.clearRect(0, 0, prev.width, prev.height); ctx.save(); ctx.scale(prev.width / 512, prev.height / 512); S.drawLogo(ctx, sp); ctx.restore();
+  };
   S.renderEditor = () => {
     const sp = S.editing, box = document.getElementById('sponsor-form'); box.innerHTML = '';
-    const prev = document.getElementById('sponsor-preview'); const ctx = prev.getContext('2d');
-    ctx.clearRect(0, 0, prev.width, prev.height); ctx.save(); ctx.scale(prev.width / 512, prev.height / 512); S.drawLogo(ctx, sp); ctx.restore();
+    S.drawPreview();
     const row = (l, input, hint) => el('label', { class: 'ctl' }, [el('span', { class: 'ctl-l', text: l }), input, hint ? el('small', { text: hint }) : null]);
-    const txt = (v, on, ph) => el('input', { type: 'text', value: v || '', placeholder: ph || '', oninput: (e) => { on(e.target.value); S.renderEditor(); } });
+    // Typing only updates the model and repaints the logo. Rebuilding the form here would steal focus after
+    // every keystroke, which is what made these boxes feel sticky.
+    const txt = (v, on, ph) => el('input', { type: 'text', value: v || '', placeholder: ph || '', oninput: (e) => { on(e.target.value); S.drawPreview(); } });
     const sel = (v, opts, on) => { const e = el('select', { onchange: (ev) => { on(ev.target.value); S.renderEditor(); } }); for (const [a, b] of opts) e.appendChild(el('option', { value: a, text: b, selected: a === v ? 'selected' : null })); return e; };
     box.appendChild(row('Company name', txt(sp.name, v => sp.name = v, "Gristle's Meat Barn")));
     box.appendChild(row('Tagline', txt(sp.tagline, v => sp.tagline = v, 'Meat. In a barn.')));
     box.appendChild(row('Logo shape', sel(sp.shape, S.SHAPES, v => sp.shape = v)));
     box.appendChild(row('Logo text', txt(sp.text, v => sp.text = v, 'GMB'), 'Short is better. Three letters looks the best.'));
-    box.appendChild(row('Logo colours', el('div', { class: 'inline' }, [el('input', { type: 'color', value: sp.color, oninput: (e) => { sp.color = e.target.value; S.renderEditor(); } }), el('input', { type: 'color', value: sp.color2, oninput: (e) => { sp.color2 = e.target.value; S.renderEditor(); } })])));
+    box.appendChild(row('Logo colours', el('div', { class: 'inline' }, [el('input', { type: 'color', value: sp.color, oninput: (e) => { sp.color = e.target.value; S.drawPreview(); } }), el('input', { type: 'color', value: sp.color2, oninput: (e) => { sp.color2 = e.target.value; S.drawPreview(); } })])));
     box.appendChild(row('...or upload a logo PNG (square, transparent)', el('div', { class: 'inline' }, [
       el('input', { type: 'file', accept: 'image/png,image/webp,image/jpeg', onchange: (e) => { const f = e.target.files[0]; if (!f) return; if (f.size > 1.5 * 1024 * 1024) { alert('Keep logos under 1.5MB.'); return; } const rd = new FileReader(); rd.onload = () => { sp.logo = rd.result; P.items.img(rd.result); setTimeout(S.renderEditor, 120); }; rd.readAsDataURL(f); e.target.value = ''; } }),
       sp.logo ? el('button', { class: 'btn small danger', text: '✕ use the drawn logo instead', onclick: () => { sp.logo = null; S.renderEditor(); } }) : null,

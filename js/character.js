@@ -22,7 +22,7 @@ window.P = window.P || {};
   C.blank = () => ({
     id: U.uid(), name: '', tag: { adj: 'Warlike', noun: 'Pig' }, hometown: 'Parts Unknown', weight: '275 pounds', gender: 'Unspecified', pronouns: 'they',
     persona: 'showboat', catchphrase: 'Punchma balls!', voice: { pitch: 1, rate: 1 },
-    song: { type: 'builtin', id: 'hype', custom: null, name: '' },
+    song: { type: 'builtin', id: 'hype', custom: null, name: '', loop: true },
     vo: {}, // event -> { url, name } recorded or uploaded voice lines
     builtin: false,
     body: { type: 'average', headShape: 'round', height: 1, girth: 1, headSize: 1, torsoLength: 1, armLength: 1, legLength: 1, limbThickness: 1, neckLength: 1, skin: '#f2c9a0' },
@@ -48,7 +48,7 @@ window.P = window.P || {};
     ch.hometown = pk(P.data.HOMETOWN); ch.weight = pk(P.data.WEIGHT); ch.gender = pk(P.data.GENDER); ch.pronouns = pk(P.data.PRONOUNS).id;
     ch.persona = pk(P.data.PERSONAS).id; ch.catchphrase = pk(P.data.CATCHPHRASES);
     ch.voice = { pitch: +r(0.3, 2).toFixed(2), rate: +r(0.7, 1.4).toFixed(2) };
-    ch.song = { type: 'builtin', id: pk(P.audio ? P.audio.songList() : [{ id: 'hype' }]).id, custom: null, name: '' };
+    ch.song = { type: 'builtin', id: pk(P.audio ? P.audio.songList() : [{ id: 'hype' }]).id, custom: null, name: '', loop: true };
     const wobble = (lo, hi) => +(U.chance(0.35) ? r(lo, hi) : r(0.8, 1.25)).toFixed(2);
     ch.body = { type: pk(C.BODY_TYPES)[0], headShape: pk(C.HEAD_SHAPES)[0], height: wobble(0.55, 1.5), girth: wobble(0.55, 1.8), headSize: wobble(0.55, 1.7), torsoLength: wobble(0.6, 1.5),
       armLength: wobble(0.45, 1.9), legLength: wobble(0.35, 1.9), limbThickness: wobble(0.6, 2.2), neckLength: U.chance(0.2) ? +r(0, 3).toFixed(2) : 1, skin: pk(C.SKINS) };

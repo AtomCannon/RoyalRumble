@@ -124,6 +124,7 @@ window.P = window.P || {};
       case 'song': {
         const songs = P.audio.songList();
         pane.appendChild(row('Walk-on song', select(ch.song.type === 'custom' ? 'custom' : ch.song.id, songs.map(s => [s.id, s.name]).concat([['custom', '🎵 Custom (uploaded / URL)']]), v => { if (v === 'custom') { ch.song.type = 'custom'; } else { ch.song.type = 'builtin'; ch.song.id = v; } })));
+        pane.appendChild(el('label', { class: 'mini' }, [el('input', { type: 'checkbox', checked: ch.song.loop !== false ? 'checked' : null, onchange: (e) => { ch.song.loop = e.target.checked; } }), ' Loop the song until the walk-out is over (otherwise it plays once and stops)']));
         pane.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Preview song', () => { P.audio.init(); P.audio.playCharSong(ch); }), btn('⏹ Stop', () => P.audio.stopSong())]));
         pane.appendChild(el('hr'));
         pane.appendChild(el('p', { class: 'help', html: `<b>Your own song.</b> Upload any length of audio, then pick the best <b>${B.SNIP_MAX} seconds</b> with the waveform editor. Only the snippet is saved (in your browser, with this fighter).` }));
@@ -241,17 +242,22 @@ window.P = window.P || {};
   // ---- walk-on behaviour preview ----
   B.playWalkOn = () => {
     const ch = B.ch; B.stopWalkOn();
-    P.audio.init(); P.audio.playCharSong(ch); P.voice.stop();
+    P.audio.init(); P.voice.stop();
+    P.audio.sfx('buzzer');                       // the entrance buzzer, same as in the ring
+    setTimeout(() => { if (B.walk) P.audio.playCharSong(ch); }, 700);
     const steps = P.rumble.entranceScript({ ch });
-    B.walk = { steps, i: 0, t: 0 };
+    const w = B.walk = { steps, i: 0, t: 0, voiceDone: false };
     P.voice.say(P.data.ANN.intro(ch, 1), { role: 'ann', priority: 3 })
-      .then(() => { if (!B.walk) return; if (P.voice.vo(ch, 'entrance', { force: true })) return; return P.voice.say(ch.catchphrase, { role: 'fighter', priority: 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); });
+      .then(() => { if (B.walk !== w) return; const clip = P.voice.vo(ch, 'entrance', { force: true }); if (clip) return clip; return P.voice.say(ch.catchphrase, { role: 'fighter', priority: 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); })
+      .then(() => { if (B.walk === w) w.voiceDone = true; });
+    setTimeout(() => { if (B.walk === w) w.voiceDone = true; }, 45000);
   };
   B.stopWalkOn = () => { B.walk = null; P.audio.stopSong(); P.voice.stop(); };
   B.walkStep = (dt) => {
     const w = B.walk; if (!w) return null;
     w.t += dt; const step = w.steps[w.i];
-    if (!step) { B.walk = null; P.audio.stopSong(); return null; }
+    // like the real thing: the walk-out is not over until the ring announcer is finished
+    if (!step) { if (!w.voiceDone) return { anim: 'taunt', opts: {} }; B.walk = null; P.audio.stopSong(); return null; }
     const durOf = (st) => st.type === 'walk' ? 1.6 : st.type === 'anim' ? st.dur : st.type === 'fall' ? st.dur : 1.4;
     const dur = durOf(step);
     if (w.t >= dur) { w.i++; w.t = 0; return B.walkStep(0); }

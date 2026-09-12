@@ -47,7 +47,7 @@ window.P = window.P || {};
   const noiseBuffer = () => { const ctx = A.ctx; const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return buf; };
 
   // Play a built-in song; loops until stopped. Returns a handle.
-  A.playSong = (id) => {
+  A.playSong = (id, loop = true) => {
     A.stopSong(); const ctx = A.init(); if (!ctx) return null;
     const song = A.SONGS[id] || A.SONGS.hype; const spb = 60 / song.bpm;
     const handle = { id, stopped: false, nodes: [], timer: null };
@@ -72,7 +72,12 @@ window.P = window.P || {};
       if (song.noise) { const s = ctx.createBufferSource(); s.buffer = noiseBuffer(); const g = ctx.createGain(); g.gain.value = 0.03; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 3000; s.connect(f); f.connect(g); g.connect(A.musicGain); s.start(t0 + loopLen * 0.6); s.stop(t0 + loopLen); handle.nodes.push(s); }
     };
     let next = ctx.currentTime + 0.05;
-    const tick = () => { if (handle.stopped) return; while (next < ctx.currentTime + 1.0) { schedule(next); next += loopLen; } handle.timer = setTimeout(tick, 300); };
+    const tick = () => {
+      if (handle.stopped) return;
+      while (next < ctx.currentTime + 1.0) { if (!loop && handle.played) break; schedule(next); next += loopLen; handle.played = true; }
+      if (!loop && handle.played && next <= ctx.currentTime + 1.0) { handle.timer = setTimeout(() => A.stopSong(), Math.max(0, (next - ctx.currentTime) * 1000)); return; }
+      handle.timer = setTimeout(tick, 300);
+    };
     tick(); A.current = handle; return handle;
   };
   A.drum = (t, kind) => {
@@ -84,13 +89,14 @@ window.P = window.P || {};
     if (A.current) { A.current.stopped = true; clearTimeout(A.current.timer); for (const n of A.current.nodes) { try { n.stop(); } catch (e) { } } A.current = null; }
     if (A.audioEl) { try { A.audioEl.pause(); } catch (e) { } A.audioEl = null; }
   };
-  A.playUrl = (url, loop = true) => { A.stopSong(); try { const el = new Audio(url); el.volume = A.settings.music; el.loop = loop; el.play().catch(() => { }); A.audioEl = el; } catch (e) { } };
+  A.playUrl = (url, loop = true) => { A.stopSong(); try { const el = new Audio(url); el.volume = A.settings.music; el.loop = !!loop; el.play().catch(() => { }); A.audioEl = el; } catch (e) { } };
   // Play a character's song (built-in or custom data URL / URL)
   A.playCharSong = (ch) => {
     A.stopSong();
+    const loop = !ch.song || ch.song.loop !== false;
     if (ch.song && ch.song.type === 'custom' && ch.song.custom) {
-      try { const el = new Audio(ch.song.custom); el.volume = A.settings.music; el.loop = true; el.play().catch(() => { }); A.audioEl = el; } catch (e) { A.playSong('hype'); }
-    } else A.playSong((ch.song && ch.song.id) || 'hype');
+      try { const el = new Audio(ch.song.custom); el.volume = A.settings.music; el.loop = loop; el.play().catch(() => { }); A.audioEl = el; } catch (e) { A.playSong('hype', loop); }
+    } else A.playSong((ch.song && ch.song.id) || 'hype', loop);
   };
 
   // ---- SFX ----

@@ -149,8 +149,8 @@ window.P = window.P || {};
       V.voCool[k] = now + (V.COOLDOWN[event] || 20);
     }
     V.voLast = now;
-    if (clip) { V.playClip(clip); return true; }
-    if (opts.fallback) { V.say(opts.fallback, { role: 'fighter', priority: opts.priority || 1, maxAge: opts.maxAge || 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); return true; }
+    if (clip) return V.playClip(clip);   // a promise, so callers can wait for the clip to finish
+    if (opts.fallback) return V.say(opts.fallback, { role: 'fighter', priority: opts.priority || 1, maxAge: opts.maxAge || 3, pitch: ch.voice.pitch, rate: ch.voice.rate });
     return false;
   };
   V.voReset = () => { V.voCool = {}; V.voLast = 0; };
