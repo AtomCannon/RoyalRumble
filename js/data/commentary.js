@@ -102,10 +102,10 @@ P.data.EX = {
     [[T, 'They\'re just kind of circling each other.'], [G, 'It\'s called strategy, Tonya.'], [T, 'It\'s called being scared, Gary.']],
     [[G, 'What\'s {a} doing over there?'], [T, 'Thinking, I hope. Probably not.']],
   ],
-  allIn: [[[G, 'That\'s everybody, Tonya. All {n} idiots are in the ring.'], [T, 'Last one standing wins. God help us all.']]],
+  allIn: [[[G, 'That\'s everybody, Tonya. All {n} fighters are in the ring.'], [T, 'Last one standing wins. God help us all.']]],
   winner: [
     [[G, 'IT\'S OVER! {name} WINS!'], [T, 'Nobody expected this, Gary. Including {name}.']],
-    [[T, '{name}, the {tag}, is the last one standing in a ring full of idiots.'], [G, 'Somebody get {obj} a towel and a lawyer.']],
+    [[T, '{name}, the {tag}, is the last one standing in a ring full of fighters.'], [G, 'Somebody get {obj} a towel and a lawyer.']],
   ],
 };
 P.data.ANN = {

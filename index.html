@@ -3,20 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PUNCHMA — Royal Rumble of Idiots</title>
+<title>PUNCHMA — Royal Rumble</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👊</text></svg>">
 </head>
 <body>
+<div class="stars" aria-hidden="true"></div>
+
 <header>
   <h1 onclick="P.app.show('roster')">PUNCH<span>MA</span></h1>
   <nav>
     <button data-screen="roster" onclick="P.app.show('roster')">Roster</button>
     <button data-screen="builder" onclick="P.builder.open(null)">+ New Fighter</button>
+    <button data-screen="sponsors" onclick="P.sponsors.openList()">Sponsors</button>
     <div class="audio">
       <label title="Music">🎵 <input type="range" id="vol-music" min="0" max="1" step="0.05"></label>
       <label title="Sound effects">💥 <input type="range" id="vol-sfx" min="0" max="1" step="0.05"></label>
       <button class="btn small" onclick="P.app.openVoices()" title="Announcer and commentator voices">🎙 Voices</button>
+      <button class="btn small" id="admin-btn" onclick="P.app.promptAdmin()" title="Admin mode is needed to start a rumble">🔒 Admin</button>
     </div>
   </nav>
 </header>
@@ -25,26 +29,49 @@
 <section id="screen-roster" class="screen on">
   <div class="toolbar">
     <button class="btn primary" onclick="P.builder.open(null)">+ New Fighter</button>
-    <button class="btn" onclick="P.app.upsert(P.char.random()); P.app.renderRoster();">🎲 Random Idiot</button>
+    <button class="btn" onclick="P.app.upsert(P.char.random()); P.app.renderRoster();">🎲 Random Fighter</button>
+    <span class="sep"></span>
     <button class="btn" onclick="P.app.selectAll(true)">Select all</button>
     <button class="btn" onclick="P.app.selectAll(false)">Select none</button>
-    <button class="btn" onclick="P.app.exportRoster()">⬇ Export roster</button>
-    <label class="btn">⬆ Import roster <input type="file" accept="application/json" hidden onchange="P.app.importRoster(event)"></label>
+    <button class="btn danger" onclick="P.app.deleteSelected()">🗑 Delete selected</button>
+    <span class="sep"></span>
+    <button class="btn" onclick="P.app.exportRoster()">⬇ Export my fighters</button>
+    <label class="btn">⬆ Import fighters <input type="file" accept="application/json" hidden onchange="P.app.importRoster(event)"></label>
   </div>
+
+  <h2 class="sechead">My fighters <small>(<span id="count-custom">0</span> — these are the ones that get exported)</small></h2>
   <div id="roster" class="grid"></div>
+
+  <h2 class="sechead">Default fighters <small>(<span id="count-default">0</span> — they come with the game and are never exported)</small>
+    <button class="btn small" onclick="P.app.restoreDefaults()">↺ Restore default fighters</button>
+  </h2>
+  <div id="roster-default" class="grid"></div>
+
   <div class="setup">
     <h2>Rumble Setup</h2>
     <div class="setrow">
-      <label>Entry interval <input type="range" id="set-interval" min="4" max="40" step="1" value="12"> <span id="set-interval-v">12s</span></label>
+      <label>Entry interval <input type="range" id="set-interval" min="6" max="60" step="1" value="20"> <span id="set-interval-v">20s</span></label>
+      <label>Fighter health <input type="range" id="set-hp" min="40" max="250" step="10" value="100"> <span id="set-hp-v">100</span></label>
       <label>Chaos (lucky events)
         <select id="set-chaos"><option value="0.4">Mild</option><option value="1" selected>Normal</option><option value="2">Chaotic</option><option value="4">Why Would You Do This</option></select>
       </label>
       <label>Speed <select id="set-speed"><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
     </div>
-    <p class="muted">Everyone has identical stats. Order is random. Nobody has an advantage. Only luck, chaos, and bad decisions.</p>
+    <div class="setrow adminonly">
+      <label class="mini"><input type="checkbox" id="set-preshow" checked> Pre-show (title card, sponsors, the spelling)</label>
+      <label class="mini"><input type="checkbox" id="set-commercials" checked> Play sponsor commercials</label>
+    </div>
+    <div class="setrow adminonly">
+      <b>Sponsors for tonight:</b>
+      <div id="sponsor-pick" class="inline"></div>
+      <button class="btn small" onclick="P.sponsors.openList()">Manage sponsors</button>
+    </div>
+    <p class="muted">Every fighter has the same stats. The order is random. Nobody has an advantage. Only luck, chaos, and bad decisions.</p>
+    <p class="muted" id="admin-hint">🔒 Only the host can start a rumble. Build your fighters, export them, and send the file to whoever is hosting.</p>
     <button id="start-btn" class="btn primary huge" onclick="P.app.startRumble()">START PUNCHMA</button>
   </div>
-  <div class="setup">
+
+  <div class="setup adminonly">
     <h2>Scripted Show (LLM-written story)</h2>
     <div id="script-body"></div>
   </div>
@@ -67,6 +94,10 @@
         <button class="btn small" onclick="P.builder.setAnim('toot')">Toot</button>
       </div>
       <div class="btnrow">
+        <button class="btn" id="walkon-btn" onclick="P.builder.playWalkOn()">🎬 Preview walk-on</button>
+        <button class="btn small" onclick="P.builder.stopWalkOn()">⏹ Stop</button>
+      </div>
+      <div class="btnrow">
         <button class="btn primary" onclick="P.builder.save()">💾 Save fighter</button>
         <button class="btn" onclick="P.builder.randomize()">🎲 Randomize everything</button>
         <button class="btn" onclick="P.builder.cancel()">Cancel</button>
@@ -76,18 +107,36 @@
   </div>
 </section>
 
+<!-- SPONSORS -->
+<section id="screen-sponsors" class="screen">
+  <div class="toolbar">
+    <button class="btn primary" onclick="P.sponsors.openEditor(null)">+ New Sponsor</button>
+    <button class="btn" onclick="P.app.show('roster')">← Back to roster</button>
+  </div>
+  <p class="help">Sponsors pay for tonight's show (in exposure). Their logos go on the ring mat, the apron, the turnbuckles, the ringside barriers and the big screen, and their commercial runs before the first fighter walks out.</p>
+  <div id="sponsor-grid" class="grid"></div>
+</section>
+
+<section id="screen-sponsor-edit" class="screen">
+  <div class="builder">
+    <div class="b-left">
+      <h2>Logo</h2>
+      <canvas id="sponsor-preview" width="360" height="360"></canvas>
+    </div>
+    <div class="b-right" id="sponsor-form"></div>
+  </div>
+</section>
+
 <!-- RUMBLE -->
 <section id="screen-rumble" class="screen">
   <div class="rumble">
     <div class="ringwrap">
-      <div class="stage">
-        <canvas id="ring" width="1280" height="720"></canvas>
-        <div id="subtitle" class="subtitle"><span class="who"></span><span class="txt"></span></div>
-      </div>
+      <div class="stage"><canvas id="ring" width="1280" height="720"></canvas></div>
       <div id="hud-list" class="chips"></div>
       <div class="ringbar">
         <span id="hud-next" class="next"></span>
         <span class="spacer"></span>
+        <button class="btn small" onclick="P.rumble.skipPreshow()">⏭ Skip pre-show</button>
         <button class="btn small" onclick="P.rumble.paused=!P.rumble.paused">⏯ Pause</button>
         <button class="btn small" onclick="P.rumble.speed=1">1x</button>
         <button class="btn small" onclick="P.rumble.speed=2">2x</button>
@@ -136,6 +185,7 @@
 <script src="js/voice.js"></script>
 <script src="js/script.js"></script>
 <script src="js/rig.js"></script>
+<script src="js/sponsors.js"></script>
 <script src="js/builder.js"></script>
 <script src="js/rumble.js"></script>
 <script src="js/app.js"></script>

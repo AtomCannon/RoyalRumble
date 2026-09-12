@@ -1,6 +1,6 @@
 # PUNCHMA 👊
 
-*Punchma balls.* A browser royal-rumble where wacky, moldable idiots walk out to their own theme song, jump into the ring, and beat each other senseless until one is left. Nobody is better than anybody. Only luck, chaos, and bad decisions.
+*Punchma balls.* A browser royal-rumble where wacky, moldable fighters walk out to their own theme song, jump into the ring, and beat each other senseless until one is left. Nobody is better than anybody. Only luck, chaos, and bad decisions.
 
 ## Play
 
@@ -10,6 +10,8 @@ No build step, no dependencies. Either:
 * serve the folder (`python3 -m http.server`) / enable GitHub Pages on this repo. Serving over HTTP also enables PNG item packs (see below).
 
 Click 🎙 **Voices** in the header to pick the announcer and commentator voices (see *Voices* below).
+
+**Admin mode.** Anyone can build fighters, but only the host can start a rumble. Click 🔒 **Admin** and enter the password (`poop`, set in `js/app.js`). Admin also unlocks the extra rumble options, sponsor selection and scripted shows. That way you can send the game to friends, they build fighters and export them, and you import the file and host the show.
 
 ## What's in the box
 
@@ -24,7 +26,7 @@ Rosters save to your browser's local storage; use Export/Import to move them aro
 
 ## Controls in the ring
 
-Space pauses. `1`, `2`, `4` set speed. "Next now" skips the wait for the next entrant (not during an entrance).
+Space pauses. `1`, `2`, `4` set speed. `S` skips the pre-show. "Next now" skips the wait for the next entrant (not during an entrance).
 
 ## Layout
 
@@ -39,7 +41,8 @@ js/render.js        rig + animation presets + drawing
 js/audio.js         synthesized songs, SFX, snippet rendering
 js/voice.js         speech queue, subtitles, TTS engines (browser / local server / in-browser Kokoro)
 js/script.js        LLM prompt export, script import + validation, local LLM call
-js/rig.js           PNG rig editor, slicer, rigged renderer
+js/rig.js           PNG rig editor, nearest-bone slicer, rigged renderer
+js/sponsors.js      sponsor model, editor, logo drawing, ring signage in perspective
 js/builder.js       character builder UI
 js/rumble.js        simulation: entrances, combat, luck, eliminations, winner
 js/app.js           screens, roster storage, setup

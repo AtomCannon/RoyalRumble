@@ -1,13 +1,16 @@
 // Voice system: one speech queue with priorities, three speakers (ring announcer, Gary, Tonya) plus fighter catchphrases,
-// subtitles, and pluggable TTS engines: browser speechSynthesis (default), an OpenAI-compatible local server
+// recorded character clips, and pluggable TTS engines: browser speechSynthesis (default), an OpenAI-compatible local server
 // (e.g. Kokoro-FastAPI at http://localhost:8880), or Kokoro running in the browser (kokoro-js, ~90MB download, needs http(s)).
 window.P = window.P || {};
 (function () {
   const U = P.util;
   const V = P.voice = { queue: [], busy: false, lastSpoke: 0, cache: new Map(), kokoro: null, el: null };
   V.ROLES = { ann: 'Ring Announcer', gary: 'Gary Gristle', tonya: 'Tonya Thunderfist', fighter: 'Fighters' };
+  V.SPELL = 'P. U. N. C. H. M. A.';
+  // Speech engines shout "P-U-N-C-H-M-A" at an all-caps PUNCHMA, so always speak it sentence case.
+  V.clean = (t) => String(t == null ? '' : t).replace(/PUNCHMA/g, 'Punchma').replace(/\bPUNCHMA\b/gi, 'Punchma');
   V.defaults = () => ({
-    enabled: true, engine: 'browser', subtitles: true,
+    enabled: true, engine: 'browser', clips: true,
     serverUrl: 'http://localhost:8880', serverModel: 'kokoro',
     kokoroUrl: 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js', kokoroModel: 'onnx-community/Kokoro-82M-v1.0-ONNX', kokoroDtype: 'q8',
     roles: {
@@ -34,12 +37,12 @@ window.P = window.P || {};
   // say(text, { role, priority: 1 chatter | 2 important | 3 must, maxAge, pitch, rate, group })
   V.say = (text, o = {}) => new Promise((resolve) => {
     if (!text || !V.s.enabled) return resolve();
-    V.queue.push({ text: String(text), role: o.role || 'ann', priority: o.priority ?? 2, t: performance.now(), maxAge: (o.maxAge ?? 9) * 1000, pitch: o.pitch, rate: o.rate, resolve, group: o.group });
+    V.queue.push({ text: V.clean(text), role: o.role || 'ann', priority: o.priority ?? 2, t: performance.now(), maxAge: (o.maxAge ?? 9) * 1000, pitch: o.pitch, rate: o.rate, resolve, group: o.group });
     V.pump();
   });
   // exchange([[who, text], ...]) speaks lines in order as one group; the whole group is dropped if it expires before starting
   V.exchange = (lines, o = {}) => { const g = U.uid(); const ps = lines.map(([who, text]) => V.say(text, Object.assign({ role: who, group: g }, o))); return Promise.all(ps); };
-  V.stop = () => { V.queue.forEach(q => q.resolve()); V.queue = []; V.busy = false; V.stopCurrent(); V.subtitle(null); };
+  V.stop = () => { V.queue.forEach(q => q.resolve()); V.queue = []; V.busy = false; V.stopCurrent(); V.clipStop(); };
   V.stopCurrent = () => { try { speechSynthesis.cancel(); } catch (e) { } if (V.audioEl) { try { V.audioEl.pause(); } catch (e) { } V.audioEl = null; } };
   V.idle = () => !V.busy && !V.queue.length;
 
@@ -59,13 +62,11 @@ window.P = window.P || {};
     if (head.priority === 1 && now - V.lastSpoke < 2500) { setTimeout(V.pump, 800); return; }
     V.queue.shift();
     V.busy = true; V.current = head;
-    V.subtitle(head.role, head.text);
     if (P.audio && P.audio.duck) P.audio.duck(true);
     V.speak(head).catch(() => { }).then(() => {
       V.busy = false; V.lastSpoke = performance.now(); head.resolve();
       const next = V.queue[0]; const sameGroup = next && head.group && next.group === head.group;
       if (!sameGroup) { if (P.audio && P.audio.duck) P.audio.duck(false); }
-      setTimeout(() => { if (V.idle()) V.subtitle(null); }, sameGroup ? 0 : 900);
       setTimeout(V.pump, sameGroup ? 120 : 450);
     });
   };
@@ -107,7 +108,7 @@ window.P = window.P || {};
     const k = cacheKey(q, 'kokoro'); let blob = V.cache.get(k);
     if (!blob) {
       if (!V.kokoro) {
-        V.subtitle('ann', 'Loading natural voice model (about 90 MB, one time)...');
+        if (P.rumble) P.rumble.note = 'Loading natural voice model (about 90 MB, one time)...';
         const mod = await import(/* webpackIgnore: true */ V.s.kokoroUrl);
         const KokoroTTS = mod.KokoroTTS || (mod.default && mod.default.KokoroTTS);
         V.kokoro = await KokoroTTS.from_pretrained(V.s.kokoroModel, { dtype: V.s.kokoroDtype, device: navigator.gpu ? 'webgpu' : 'wasm' });
@@ -119,12 +120,38 @@ window.P = window.P || {};
     await playBlob(blob);
   };
 
-  // ---- subtitles ----
-  V.subtitle = (role, text) => {
-    const el = V.el || (V.el = document.getElementById('subtitle')); if (!el) return;
-    if (!text || !V.s.subtitles) { el.classList.remove('on'); return; }
-    el.querySelector('.who').textContent = V.ROLES[role] || role; el.querySelector('.who').dataset.role = role;
-    el.querySelector('.txt').textContent = text; el.classList.add('on');
+  // ---- recorded clips (custom voice lines) ----
+  V.clipStop = () => { if (V.clipEl) { try { V.clipEl.pause(); } catch (e) { } V.clipEl = null; } };
+  V.playClip = (url) => new Promise((resolve) => {
+    if (!url || !V.s.enabled || !V.s.clips) return resolve();
+    V.clipStop();
+    try {
+      const el = new Audio(url); V.clipEl = el; el.volume = 1;
+      if (P.audio && P.audio.duck) P.audio.duck(true);
+      const fin = () => { if (V.clipEl === el) { V.clipEl = null; if (P.audio && P.audio.duck) P.audio.duck(false); } resolve(); };
+      el.onended = fin; el.onerror = fin; el.play().catch(fin);
+      setTimeout(fin, 22000);
+    } catch (e) { resolve(); }
+  });
+  V.test = (role) => { const t = { ann: 'Ladies and gentlemen... welcome... to Punchma!', gary: 'Tonya, I have never seen anything like this. And I was at the buffet incident.', tonya: 'Gary, we agreed never to talk about the buffet incident.', fighter: 'Punchma balls!' }[role]; V.stop(); V.say(t, { role, priority: 3 }); };
+
+  // ---- character voice lines: play a recorded clip for an event, with anti-spam cooldowns ----
+  V.EVENTS = [['entrance', 'Entrance', 'Right after the ring announcer finishes'], ['taunt', 'Taunt', 'While roaming the ring'], ['hit', 'Taking a hit', 'When they get hurt'], ['big', 'Big hit', 'When something huge lands on them'], ['attack', 'Attacking', 'When they land a hit'], ['eliminated', 'Eliminated', 'On the way over the top rope'], ['victory', 'Victory', 'When they win the whole thing']];
+  V.COOLDOWN = { entrance: 0, taunt: 45, hit: 25, big: 20, attack: 30, eliminated: 0, victory: 0 };
+  V.voCool = {}; V.voLast = 0;
+  V.vo = (ch, event, opts = {}) => {
+    const clip = ch && ch.vo && ch.vo[event] && ch.vo[event].url;
+    const now = performance.now() / 1000, force = opts.force;
+    if (!force) {
+      if (now - V.voLast < 4) return false;                       // never two clips on top of each other
+      const k = ch.id + ':' + event;
+      if (V.voCool[k] && now < V.voCool[k]) return false;         // per fighter, per event
+      V.voCool[k] = now + (V.COOLDOWN[event] || 20);
+    }
+    V.voLast = now;
+    if (clip) { V.playClip(clip); return true; }
+    if (opts.fallback) { V.say(opts.fallback, { role: 'fighter', priority: opts.priority || 1, maxAge: opts.maxAge || 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); return true; }
+    return false;
   };
-  V.test = (role) => { const t = { ann: 'Ladies and gentlemen... welcome... to PUNCHMA!', gary: 'Tonya, I have never seen anything like this. And I was at the buffet incident.', tonya: 'Gary, we agreed never to talk about the buffet incident.', fighter: 'Punchma balls!' }[role]; V.stop(); V.say(t, { role, priority: 3 }); };
+  V.voReset = () => { V.voCool = {}; V.voLast = 0; };
 })();

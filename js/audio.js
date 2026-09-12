@@ -84,6 +84,7 @@ window.P = window.P || {};
     if (A.current) { A.current.stopped = true; clearTimeout(A.current.timer); for (const n of A.current.nodes) { try { n.stop(); } catch (e) { } } A.current = null; }
     if (A.audioEl) { try { A.audioEl.pause(); } catch (e) { } A.audioEl = null; }
   };
+  A.playUrl = (url, loop = true) => { A.stopSong(); try { const el = new Audio(url); el.volume = A.settings.music; el.loop = loop; el.play().catch(() => { }); A.audioEl = el; } catch (e) { } };
   // Play a character's song (built-in or custom data URL / URL)
   A.playCharSong = (ch) => {
     A.stopSong();

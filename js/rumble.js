@@ -18,20 +18,86 @@ window.P = window.P || {};
     return V.exchange(U.pick(pool).map(([who, t]) => [who, U.fmt(t, vars)]), o);
   };
 
+  // ---------------- sponsor signage ----------------
+  const matSlot = (i, n) => { // i-th of n logos laid on the mat, in ring parameter space
+    const pad = 0.06, wEach = (1 - pad * (n + 1)) / n, u0 = pad + i * (wEach + pad), u1 = u0 + wEach;
+    const t0 = 0.3, t1 = 0.82;
+    const edge = (t) => [U.lerp(RING.bl[0], RING.fl[0], t), U.lerp(RING.br[0], RING.fr[0], t)];
+    const [l0, r0] = edge(t0), [l1, r1] = edge(t1);
+    return { bx0: U.lerp(l0, r0, u0), bx1: U.lerp(l0, r0, u1), by: U.lerp(RING.bl[1], RING.fl[1], t0), fx0: U.lerp(l1, r1, u0), fx1: U.lerp(l1, r1, u1), fy: U.lerp(RING.bl[1], RING.fl[1], t1) };
+  };
+  Rm.drawSignage = (ctx) => {
+    const sp = Rm.sponsors || []; if (!sp.length) return;
+    const mat = sp.filter(s => s.spots.mat), apron = sp.filter(s => s.spots.apron), tb = sp.filter(s => s.spots.turnbuckle), ban = sp.filter(s => s.spots.banner), scr = sp.filter(s => s.spots.screen);
+    mat.slice(0, 3).forEach((s, i) => { const img = P.sponsors.logoImage(s); if (img) P.sponsors.drawTrapezoid(ctx, img, matSlot(i, Math.min(3, mat.length)), 0.55); });
+    apron.slice(0, 3).forEach((s, i) => {
+      const img = P.sponsors.logoImage(s); if (!img) return;
+      const n = Math.min(3, apron.length), w = (RING.fr[0] - RING.fl[0]) / n, x = RING.fl[0] + i * w;
+      ctx.save(); ctx.globalAlpha = 0.95; ctx.drawImage(img, x + w * 0.06, 676, w * 0.88, 46); ctx.restore();
+      D.text(ctx, (s.name || '').toUpperCase().slice(0, 22), x + w / 2, 664, 15, '#ffd23f');
+    });
+    if (tb.length) { const img = P.sponsors.logoImage(tb[0]); if (img) for (const [px, py] of [RING.bl, RING.br, RING.fl, RING.fr]) { D.rr(ctx, px - 17, py - RING.post - 6, 34, 44, 6, '#fff', 3); ctx.drawImage(img, px - 15, py - RING.post - 4, 30, 40); } }
+    ban.forEach((s, i) => {
+      const img = P.sponsors.logoImage(s); if (!img) return;
+      const n = ban.length, span = 2400 / n, x = -560 + i * span;
+      D.rect(ctx, x, 306, span - 16, 66, '#101828', 3);
+      ctx.drawImage(img, x + 10, 310, 58, 58);
+      D.text(ctx, (s.name || '').toUpperCase().slice(0, 26), x + span / 2 + 16, 342, 26, s.color2 || '#ffd23f');
+    });
+    if (scr.length) { const s = scr[Math.floor(Rm.t / 7) % scr.length], img = P.sponsors.logoImage(s); D.rect(ctx, -620, 112, 360, 132, '#05070f', 5); if (img) ctx.drawImage(img, -600, 118, 118, 118); if (s) { D.text(ctx, (s.name || '').toUpperCase().slice(0, 16), -350, 160, 22, '#ffd23f'); D.text(ctx, (s.tagline || '').slice(0, 26), -350, 196, 14, '#fff', 'Georgia, serif'); } }
+  };
+
+  // ---------------- pre-show ----------------
+  Rm.buildPreshow = () => {
+    const st = [];
+    st.push({ kind: 'title', dur: 7 });
+    if (Rm.settings.commercials !== false) for (const sp of Rm.sponsors) { const lines = (sp.commercial || []).filter(l => l && l.trim()); if (lines.length || sp.tagline) st.push({ kind: 'ad', sp, dur: 5 + lines.length * 3.5 }); }
+    if (Rm.sponsors.length) st.push({ kind: 'board', dur: 5 });
+    st.push({ kind: 'spell', dur: 9 });
+    return st;
+  };
+  Rm.preStep = (step) => {
+    const V = P.voice;
+    if (step.kind === 'title') {
+      A.sfx('crash'); burst(920, 260, '#ffd23f', 40);
+      V.say('Ladies and gentlemen... boys and girls... people watching this at work...', { role: 'ann', priority: 3 });
+      V.say('Welcome... to Punchma!', { role: 'ann', priority: 3 });
+      ex('welcome', null, null, { n: Rm.total }, { priority: 2, maxAge: 25 });
+    } else if (step.kind === 'ad') {
+      const sp = step.sp;
+      if (sp.music && sp.music.type === 'custom' && sp.music.custom) A.playUrl(sp.music.custom); else A.playSong((sp.music && sp.music.id) || 'jingle');
+      V.say('Tonight\'s Punchma is brought to you by ' + sp.name + '.', { role: 'ann', priority: 3 });
+      const lines = (sp.commercial || []).filter(l => l && l.trim()).concat(sp.tagline ? [sp.tagline] : []);
+      V.exchange(lines.map(l => [sp.voice || 'ann', l]), { priority: 3 });
+    } else if (step.kind === 'board') {
+      A.stopSong();
+      V.say('Tonight\'s show is sponsored by ' + Rm.sponsors.map(s => s.name).join(', ') + '.', { role: 'ann', priority: 3 });
+      V.exchange([['gary', 'They paid for this, Tonya.'], ['tonya', 'Nobody paid for this, Gary.']], { priority: 2, maxAge: 12 });
+    } else if (step.kind === 'spell') {
+      A.stopSong(); A.sfx('bell');
+      V.say('It is time. You know what time it is. It is time for...', { role: 'ann', priority: 3 });
+      V.say(V.SPELL, { role: 'ann', priority: 3, rate: 0.78 });
+      V.say('Punchma!', { role: 'ann', priority: 3 });
+      V.exchange([['gary', 'He spells it every single time.'], ['tonya', 'It is in his contract, Gary.']], { priority: 2, maxAge: 14 });
+    }
+  };
+  Rm.skipPreshow = () => { if (!Rm.pre) return; Rm.pre = null; P.voice.stop(); A.stopSong(); A.sfx('bell'); Rm.nextEntry = 1.5; };
+
   Rm.start = (chars, settings, script) => {
-    Rm.settings = Object.assign({ interval: 20, chaos: 1, speed: 1, hp: 100 }, settings || {});
+    Rm.settings = Object.assign({ interval: 20, chaos: 1, speed: 1, hp: 100, commercials: true, preshow: true, sponsors: [] }, settings || {});
+    Rm.sponsors = (Rm.settings.sponsors || []).map(id => P.sponsors.get(id)).filter(Boolean);
     Rm.fighters = []; Rm.popups = []; Rm.particles = []; Rm.t = 0; Rm.speed = Rm.settings.speed; Rm.paused = false; Rm.winner = null; Rm.ended = false;
     Rm.script = script ? P.script.prepare(script, chars) : null;
     const order = Rm.script && Rm.script.order.length ? Rm.script.order : U.shuffle(chars.slice());
     Rm.queue = order.map((ch, i) => ({ ch, n: i + 1 }));
     Rm.total = Rm.queue.length; Rm.entered = 0; Rm.elims = {};
-    Rm.nextEntry = 2.5; Rm.luckyT = (10 + U.rand(4, 10)) / Rm.settings.chaos; Rm.chatterT = 12; Rm.globals = {}; Rm.hold = false; Rm.dim = 0; Rm.view = 'ring'; Rm.card = null;
+    Rm.nextEntry = 3.5; Rm.luckyT = (10 + U.rand(4, 10)) / Rm.settings.chaos; Rm.chatterT = 12; Rm.globals = {}; Rm.hold = false; Rm.dim = 0; Rm.view = 'ring'; Rm.card = null;
     Rm.cam = { x: 920, y: 430, zoom: 0.8 };
     Rm.crowd = []; for (let r = 0; r < 5; r++) for (let i = 0; i < 62; i++) Rm.crowd.push({ x: i * 54 + (r % 2) * 27 - 700, y: 120 + r * 44, c: U.randColor(), hc: U.pick(P.char.HAIR_COLORS), ph: U.rand(6.28), s: U.rand(0.8, 1.2) });
     Rm.canvas = document.getElementById('ring'); Rm.ctx = Rm.canvas.getContext('2d');
-    A.init(); A.sfx('bell'); V.stop();
-    V.say(P.data.ANN.welcome(Rm.total), { role: 'ann', priority: 3 });
-    ex('welcome', null, null, { n: Rm.total }, { priority: 2, maxAge: 30 });
+    A.init(); V.stop(); V.voReset(); P.sponsors.cache = {};
+    Rm.pre = Rm.settings.preshow === false ? null : { steps: Rm.buildPreshow(), i: -1, t: 0, letters: 0 };
+    if (!Rm.pre) { A.sfx('bell'); V.say(P.data.ANN.welcome(Rm.total), { role: 'ann', priority: 3 }); ex('welcome', null, null, { n: Rm.total }, { priority: 2, maxAge: 30 }); }
     if (Rm.script && Rm.script.title) V.say(`Tonight: ${Rm.script.title}.`, { role: 'ann', priority: 3 });
     Rm.running = true; Rm.last = performance.now(); Rm.frameCount = 0;
     requestAnimationFrame(Rm.frame);
@@ -44,6 +110,7 @@ window.P = window.P || {};
   const anim = (a, dur, sfx) => ({ type: 'anim', anim: a, dur, sfx });
   const enter = (style) => ({ type: 'enter', style });
   const fall = (dur) => ({ type: 'fall', dur });
+  Rm.entranceScript = Rm.entranceScript || null;
   Rm.entranceScript = (f) => {
     const stand = anim('idle', 1.8); // soak in the moment at the top of the ramp
     switch (f.ch.persona) {
@@ -78,7 +145,7 @@ window.P = window.P || {};
     Rm.hold = true; Rm.view = 'entrance'; Rm.entrant = f; Rm.card = { f, t: 0 };
     A.sfx('buzzer'); setTimeout(() => { if (Rm.running && Rm.entrant === f) A.playCharSong(f.ch); }, 700);
     V.say(Rm.script && Rm.script.intros[f.ch.id] ? Rm.script.intros[f.ch.id] : P.data.ANN.intro(f.ch, f.n), { role: 'ann', priority: 3 })
-      .then(() => { if (Rm.running && f.ch.catchphrase) return V.say(f.ch.catchphrase, { role: 'fighter', priority: 3, pitch: f.ch.voice.pitch, rate: f.ch.voice.rate }); })
+      .then(() => { if (!Rm.running) return; if (V.vo(f.ch, 'entrance', { force: true })) return; if (f.ch.catchphrase) return V.say(f.ch.catchphrase, { role: 'fighter', priority: 3, pitch: f.ch.voice.pitch, rate: f.ch.voice.rate }); })
       .then(() => { if (!Rm.running) return; const lines = P.data.EX.entrance[f.ch.persona] || P.data.EX.entrance.generic; V.exchange(U.pick(lines).map(([who, t]) => [who, U.fmt(t, { name: f.ch.name, tag: P.char.tagline(f.ch) })]), { priority: 2, maxAge: 20 }); });
     Rm.updateHud();
   };
@@ -125,6 +192,8 @@ window.P = window.P || {};
     if (f.buffs.rage > 0) dmg *= 2; if (f.buffs.ghost > 0) dmg = Math.round(dmg * 1.5); if (t.buffs.shield > 0) dmg = Math.round(dmg / 2);
     if (Rm.script && Rm.script.active) dmg = Math.min(dmg, Math.max(0, t.hp - 1)); // scripted rumbles: freeform hits never eliminate
     applyHit(f, t, mv, dmg, U.pick(mv.fx), { big: mv.big, knock: mv.knock, stun: mv.stun, low: mv.low, sfx: mv.sfx });
+    V.vo(t.ch, mv.big ? 'big' : 'hit');
+    if (U.chance(0.3)) V.vo(f.ch, 'attack');
     if (mv.low) ex('lowblow', f, t, null, { priority: 2, maxAge: 6 });
     else if (mv.id === 'toot') ex('toot', f, t, null, { priority: 2, maxAge: 6 });
     else if (mv.big) ex('bigMove', f, t, null, { priority: 2, maxAge: 6 });
@@ -137,6 +206,7 @@ window.P = window.P || {};
     t.outX = t.x < 920 ? U.rand(60, 230) : U.rand(1620, 1780); t.outZ = 1.2;
     A.sfx('big'); A.sfx('cheer'); burst(t.x, footY(t.z) - 100, '#fff', 20);
     if (by) { by.elims++; Rm.elims[by.ch.id] = (Rm.elims[by.ch.id] || 0) + 1; }
+    V.vo(t.ch, 'eliminated', { force: true });
     V.say(P.data.ANN.elim(t.ch), { role: 'ann', priority: 3 });
     if (say) V.exchange(say, { priority: 3 }); else ex('elim', by || t, t, null, { priority: 2, maxAge: 12 });
     Rm.updateHud();
@@ -206,6 +276,17 @@ window.P = window.P || {};
   // ---------------- update ----------------
   Rm.update = (dt) => {
     Rm.t += dt;
+    if (Rm.pre) {
+      const pre = Rm.pre; pre.t += dt;
+      const cur = pre.steps[pre.i];
+      if (pre.i < 0 || (pre.t > (cur ? cur.dur : 0) && P.voice.idle())) {
+        pre.i++; pre.t = 0; pre.letters = 0;
+        if (pre.i >= pre.steps.length) { Rm.pre = null; A.stopSong(); A.sfx('bell'); Rm.nextEntry = 1.5; }
+        else Rm.preStep(pre.steps[pre.i]);
+      }
+      if (Rm.pre && pre.steps[pre.i] && pre.steps[pre.i].kind === 'spell') pre.letters = U.clamp(Math.floor((pre.t - 2.2) / 0.52), 0, 7);
+      return;
+    }
     if (Rm.queue.length && !Rm.hold && !Rm.ended) { Rm.nextEntry -= dt; if (Rm.nextEntry <= 0) Rm.spawn(); }
     for (const k in Rm.globals) Rm.globals[k] = Math.max(0, Rm.globals[k] - dt);
     if (!Rm.hold && !(Rm.script && Rm.script.active)) { Rm.luckyT -= dt; if (Rm.luckyT <= 0 && active().length >= 2) { lucky(); Rm.luckyT = (10 + U.rand(0, 12)) / Rm.settings.chaos; } }
@@ -281,7 +362,7 @@ window.P = window.P || {};
             } else {
               if (!f.wander) { const b = ringX(0.5); f.wander = { x: U.rand(b.left + 40, b.right - 40), z: U.rand(0.1, 0.9) }; }
               const dx = f.wander.x - f.x, dz = f.wander.z - f.z;
-              if (Math.abs(dx) < 8 && Math.abs(dz) < 0.05) { f.pause = U.rand(1.2, 3.5); f.pauseAnim = U.pick(['idle', 'idle', 'ready', 'taunt', 'flex', 'idle']); if (f.pauseAnim === 'taunt' && U.chance(0.25) && !Rm.hold) V.say(U.pick(P.data.persona(f.ch.persona).taunts), { role: 'fighter', priority: 1, maxAge: 3, pitch: f.ch.voice.pitch, rate: f.ch.voice.rate }); }
+              if (Math.abs(dx) < 8 && Math.abs(dz) < 0.05) { f.pause = U.rand(1.2, 3.5); f.pauseAnim = U.pick(['idle', 'idle', 'ready', 'taunt', 'flex', 'idle']); if (f.pauseAnim === 'taunt' && U.chance(0.3) && !Rm.hold) V.vo(f.ch, 'taunt', { fallback: U.pick(P.data.persona(f.ch.persona).taunts) }); }
               else { f.facing = dx >= 0 ? 1 : -1; setAnim(f, 'walk', { speed: 1.6 }); const sp = 55 * speedMul * dt; f.x += Math.sign(dx) * Math.min(sp, Math.abs(dx)); f.z += Math.sign(dz) * Math.min(sp / 500, Math.abs(dz)); }
             }
           }
@@ -329,7 +410,7 @@ window.P = window.P || {};
   Rm.win = (f, byDefault) => {
     if (!f) return; Rm.ended = true; Rm.winner = f; f.state = 'winner'; f.st = 0; f.alpha = 1; f.x = 920; f.z = 0.6; f.hp = Math.max(f.hp, 1); Rm.hold = false; Rm.card = null;
     A.sfx('bell'); A.sfx('yay'); A.playCharSong(f.ch);
-    const tag = P.char.tagline(f.ch); V.stop();
+    const tag = P.char.tagline(f.ch); V.stop(); V.vo(f.ch, 'victory', { force: true });
     V.say(P.data.ANN.winner(f.ch), { role: 'ann', priority: 3 });
     ex('winner', f, f, { name: f.ch.name, tag, obj: P.char.pron(f.ch).obj }, { priority: 3 });
     if (byDefault) V.say('Technically everyone got eliminated, so the last one out wins. Those are the rules. I just made them up.', { role: 'gary', priority: 3 });
@@ -344,8 +425,9 @@ window.P = window.P || {};
       const out = ['flying', 'out'].includes(f.state); const pct = U.clamp(f.hp / f.maxHp * 100, 0, 100);
       const buffs = Object.keys(f.buffs).filter(k => f.buffs[k] > 0).map(k => ({ chair: '🪑', rage: '😡', blind: '🕶️', beer: '🍺', ghost: '👻', shield: '🛡️' }[k] || '✨')).join('');
       return `<div class="chip${out ? ' out' : ''}${f.state === 'winner' ? ' win' : ''}"><span class="hname">${U.esc(f.ch.name)}</span>${buffs}<span class="hbar"><i style="width:${pct}%;background:${pct > 50 ? '#5f5' : pct > 25 ? '#ffd23f' : '#f55'}"></i></span></div>`;
-    }).join('') || '<span class="muted">Waiting for the first idiot...</span>';
+    }).join('') || '<span class="muted">Waiting for the first fighter...</span>';
     const nx = document.getElementById('hud-next'); if (nx) nx.textContent = Rm.hold ? `Entrant ${Rm.entered} of ${Rm.total} is walking out` : Rm.queue.length ? `Next entrant in ${Math.max(0, Math.ceil(Rm.nextEntry))}s (${Rm.entered}/${Rm.total})` : Rm.ended ? 'IT\'S OVER' : `All ${Rm.total} in the ring. Last one standing wins.`;
+    if (nx && Rm.pre) nx.textContent = 'Pre-show';
   };
 
   // ---------------- drawing ----------------
@@ -367,7 +449,7 @@ window.P = window.P || {};
     const excite = Math.min(1, active().length / 4);
     for (const c of Rm.crowd) { const bob = Math.sin(Rm.t * (3 + excite * 6) + c.ph) * (2 + excite * 6); D.circle(ctx, c.x, c.y + bob, 17 * c.s, c.c, 3); ctx.beginPath(); ctx.arc(c.x, c.y + bob - 4, 17 * c.s, Math.PI, 0); ctx.closePath(); ctx.fillStyle = c.hc; ctx.fill(); if (excite > 0.5 && (c.ph * 10 | 0) % 3 === 0) D.line(ctx, c.x - 20, c.y + bob, c.x - 34, c.y + bob - 28 + Math.sin(Rm.t * 10 + c.ph) * 8, 5, c.c); }
     D.rect(ctx, -900, 330, 3600, 700, '#2b2140', 0);
-    D.text(ctx, 'PUNCHMA', 920, 60, 110, '#ff3b3b'); D.text(ctx, 'ROYAL RUMBLE OF IDIOTS', 920, 128, 30, '#ffd23f');
+    D.text(ctx, 'PUNCHMA', 920, 60, 110, '#ff3b3b'); D.text(ctx, 'ROYAL RUMBLE', 920, 128, 30, '#ffd23f');
     // entrance stage: tunnel + ramp + screen
     D.rr(ctx, -640, 250, 400, 320, 24, '#111'); D.rect(ctx, -600, 150, 320, 90, '#222', 5); D.text(ctx, 'ENTRANCE', -440, 195, 36, '#ffd23f');
     for (let i = 0; i < 12; i++) D.circle(ctx, -620 + i * 36, 262, 6, (Math.floor(Rm.t * 6) + i) % 3 === 0 ? '#ff3b3b' : '#ffd23f', 0);
@@ -377,6 +459,7 @@ window.P = window.P || {};
     D.poly(ctx, [RING.fl, RING.fr, [RING.fr[0], 730], [RING.fl[0], 730]], '#b3262e', 6);
     D.text(ctx, 'PUNCHMA', 920, 698, 44, '#ffd23f');
     ctx.save(); ctx.globalAlpha = 0.45; D.text(ctx, 'P', 920, 530, 160, '#b3262e'); ctx.restore();
+    Rm.drawSignage(ctx);
     const post = (x, y) => { D.rect(ctx, x - 8, y - RING.post, 16, RING.post, '#333', 3); D.circle(ctx, x, y - RING.post, 11, '#ffd23f', 3); };
     const rope = (a, b, col, lw) => { for (const h of RING.ropes) { ctx.beginPath(); ctx.moveTo(a[0], a[1] - h); ctx.quadraticCurveTo((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - h + 7, b[0], b[1] - h); ctx.lineWidth = lw + 3; ctx.strokeStyle = D.INK; ctx.stroke(); ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.stroke(); } };
     post(RING.bl[0], RING.bl[1]); post(RING.br[0], RING.br[1]); rope(RING.bl, RING.br, '#e33', 5);
@@ -411,6 +494,46 @@ window.P = window.P || {};
     if (Rm.card) { const f = Rm.card.f, ch = f.ch, k = Math.min(1, Rm.card.t * 2.5); const x = -420 + 440 * (1 - Math.pow(1 - k, 3)); ctx.save(); ctx.translate(x, 0); D.poly(ctx, [[0, 520], [560, 520], [530, 660], [0, 660]], '#ff3b3b', 5); D.rect(ctx, 0, 520, 560, 14, '#ffd23f', 0); D.text(ctx, `#${f.n}`, 40, 580, 40, '#ffd23f', null, 'left'); D.text(ctx, ch.name.toUpperCase().slice(0, 22), 100, 572, ch.name.length > 12 ? 34 : 44, '#fff', null, 'left'); D.text(ctx, 'the ' + P.char.tagline(ch), 100, 612, 24, '#ffd23f', 'Georgia, serif', 'left'); D.text(ctx, 'from ' + ch.hometown, 100, 640, 18, '#fff', 'Georgia, serif', 'left'); ctx.restore(); }
     if (Rm.globals.ref > 0) D.text(ctx, 'REF DISTRACTED: ANYTHING GOES', W / 2, 40, 30, '#f6f');
     if (Rm.globals.slurpee > 0) D.text(ctx, 'SLURPEE FLOOR', W / 2, 40, 30, '#7bd7ff');
+    if (Rm.pre) Rm.renderPreshow(ctx);
     if (Rm.paused) { ctx.fillStyle = '#0008'; ctx.fillRect(0, 0, W, H); D.text(ctx, 'PAUSED', W / 2, H / 2, 90, '#fff'); }
+  };
+  Rm.renderPreshow = (ctx) => {
+    const pre = Rm.pre, step = pre.steps[pre.i] || { kind: 'title' }, t = pre.t;
+    ctx.fillStyle = 'rgba(4,6,20,0.975)'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 90; i++) { const a = (i * 2.39996), r = 40 + (i % 13) * 52; const x = W / 2 + Math.cos(a + Rm.t * 0.05) * r * 2.2, y = H / 2 + Math.sin(a * 1.7 + Rm.t * 0.04) * r; ctx.globalAlpha = 0.25 + 0.55 * Math.abs(Math.sin(i + Rm.t * 1.3)); D.circle(ctx, x, y, (i % 3) * 0.7 + 0.8, '#dfe8ff', 0); }
+    ctx.globalAlpha = 1;
+    if (step.kind === 'title') {
+      const k = Math.min(1, t / 0.7), sc = 0.6 + 0.4 * (1 - Math.pow(1 - k, 3));
+      ctx.save(); ctx.translate(W / 2, H / 2 - 40); ctx.rotate(Math.sin(t * 2) * 0.012); ctx.scale(sc, sc);
+      D.text(ctx, 'PUNCHMA', 0, 0, 150, '#ff3b3b'); ctx.restore();
+      D.text(ctx, 'ROYAL RUMBLE', W / 2, H / 2 + 60, 44, '#ffd23f');
+      D.text(ctx, `${Rm.total} fighters. One ring. One winner.`, W / 2, H / 2 + 120, 26, '#fff', 'Georgia, serif');
+    } else if (step.kind === 'ad') {
+      const sp = step.sp, img = P.sponsors.logoImage(sp), k = Math.min(1, t / 0.5);
+      D.text(ctx, 'A WORD FROM OUR SPONSOR', W / 2, 70, 26, '#8fa0c0');
+      if (img) { const size = 240 * (0.7 + 0.3 * k); ctx.save(); ctx.globalAlpha = k; ctx.translate(W / 2, 250); ctx.rotate(Math.sin(t * 1.6) * 0.03); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
+      D.text(ctx, (sp.name || '').slice(0, 30), W / 2, 430, 52, '#fff');
+      D.text(ctx, (sp.tagline || '').slice(0, 60), W / 2, 490, 26, sp.color2 || '#ffd23f', 'Georgia, serif');
+      const lines = (sp.commercial || []).filter(l => l && l.trim());
+      const idx = U.clamp(Math.floor((t - 1.5) / 3.5), 0, lines.length - 1);
+      if (lines[idx] && t > 1.5) { ctx.globalAlpha = 0.9; D.text(ctx, lines[idx].slice(0, 70), W / 2, 580, 22, '#cfe0ff', 'Georgia, serif'); ctx.globalAlpha = 1; }
+    } else if (step.kind === 'board') {
+      D.text(ctx, "TONIGHT'S SPONSORS", W / 2, 110, 46, '#ffd23f');
+      const n = Rm.sponsors.length, cw = Math.min(260, (W - 120) / Math.max(1, n));
+      Rm.sponsors.forEach((sp, i) => { const img = P.sponsors.logoImage(sp), x = W / 2 + (i - (n - 1) / 2) * cw; if (img) ctx.drawImage(img, x - cw * 0.36, 220, cw * 0.72, cw * 0.72); D.text(ctx, (sp.name || '').slice(0, 18), x, 240 + cw * 0.72, 20, '#fff'); });
+    } else if (step.kind === 'spell') {
+      const word = 'PUNCHMA';
+      D.text(ctx, 'IT IS TIME FOR...', W / 2, 190, 34, '#8fa0c0');
+      for (let i = 0; i < word.length; i++) {
+        const on = i < pre.letters, x = W / 2 + (i - 3) * 146;
+        ctx.save(); ctx.globalAlpha = on ? 1 : 0.5;
+        const pop = on ? 1 + Math.max(0, 0.5 - (t - 2.2 - i * 0.52)) : 1;
+        ctx.translate(x, 400); ctx.scale(pop, pop);
+        D.text(ctx, word[i], 0, 0, 118, on ? '#ff3b3b' : '#2b3358');
+        ctx.restore();
+      }
+      if (pre.letters >= 7) D.text(ctx, 'PUNCHMA!', W / 2, 560, 60, '#ffd23f');
+    }
+    D.text(ctx, 'press S to skip', W - 90, H - 22, 16, '#8fa0c0');
   };
 })();

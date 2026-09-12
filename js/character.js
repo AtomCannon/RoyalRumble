@@ -23,6 +23,8 @@ window.P = window.P || {};
     id: U.uid(), name: '', tag: { adj: 'Warlike', noun: 'Pig' }, hometown: 'Parts Unknown', weight: '275 pounds', gender: 'Unspecified', pronouns: 'they',
     persona: 'showboat', catchphrase: 'Punchma balls!', voice: { pitch: 1, rate: 1 },
     song: { type: 'builtin', id: 'hype', custom: null, name: '' },
+    vo: {}, // event -> { url, name } recorded or uploaded voice lines
+    builtin: false,
     body: { type: 'average', headShape: 'round', height: 1, girth: 1, headSize: 1, torsoLength: 1, armLength: 1, legLength: 1, limbThickness: 1, neckLength: 1, skin: '#f2c9a0' },
     face: { eyes: 'dots', brows: 'none', nose: 'dot', mouth: 'smile', beard: 'none', facialHairColor: '#4a2a10' },
     hair: { style: 'bowl', color: '#4a2a10' },

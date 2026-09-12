@@ -11,7 +11,20 @@ window.P = window.P || {};
   };
   B.startPreview = () => {
     cancelAnimationFrame(B.raf); const cv = document.getElementById('preview'); let t0 = performance.now();
-    const loop = (now) => { const t = (now - t0) / 1000; const pose = P.render.pose(Object.assign({ t }, P.render.anim(B.previewAnim, t, { p: (Math.sin(t * 6) + 1) / 2, speed: 2 }))); if (B.previewAnim === 'walk') pose.facing = 1; if (B.peek || B.tab === 'face') { pose.hideHat = true; pose.hideHair = true; } if (B.tab === 'hair') pose.hideHat = true; P.render.portrait(cv, B.ch, pose, { bg: '#7fc8f8' }); B.raf = requestAnimationFrame(loop); };
+    let last = t0;
+    const loop = (now) => {
+      const t = (now - t0) / 1000, dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const w = B.walkStep(dt);
+      const name = w ? w.anim : B.previewAnim, opts = w ? w.opts : { p: (Math.sin(t * 6) + 1) / 2, speed: 2 };
+      const pose = P.render.pose(Object.assign({ t }, P.render.anim(name, t, opts)));
+      pose.facing = (P.render.anim(name, t, opts).facing || 1);
+      if (w && w.jump) pose.jump = (pose.jump || 0) + w.jump;
+      if (B.tab === 'face') { pose.hideHat = true; pose.hideHair = true; }
+      if (B.tab === 'hair') pose.hideHat = true;
+      const btn = document.getElementById('walkon-btn'); if (btn) btn.textContent = B.walk ? '🎬 Walking out...' : '🎬 Preview walk-on';
+      P.render.portrait(cv, B.ch, pose, { bg: '#0b1030' });
+      B.raf = requestAnimationFrame(loop);
+    };
     B.raf = requestAnimationFrame(loop);
   };
   B.stopPreview = () => cancelAnimationFrame(B.raf);
@@ -42,7 +55,7 @@ window.P = window.P || {};
   B.refresh = () => { B.renderControls(); };
   B.refreshLight = () => { const h = document.getElementById('b-title'); if (h) h.textContent = C.fullTitle(B.ch); };
 
-  const TABS = [['body', 'Body'], ['face', 'Face'], ['hair', 'Hair'], ['hat', 'Hat'], ['clothes', 'Clothes'], ['stuff', 'Stuff'], ['identity', 'Identity'], ['song', 'Walk-On'], ['png', 'Custom PNGs'], ['rig', 'Rig a PNG']];
+  const TABS = [['body', 'Body'], ['face', 'Face'], ['hair', 'Hair'], ['hat', 'Hat'], ['clothes', 'Clothes'], ['stuff', 'Stuff'], ['identity', 'Identity'], ['song', 'Walk-On'], ['voice', 'Voice Lines'], ['png', 'Custom PNGs'], ['rig', 'Rig a PNG']];
 
   B.renderControls = () => {
     const ch = B.ch, root = document.getElementById('b-controls'); root.innerHTML = '';
@@ -114,11 +127,11 @@ window.P = window.P || {};
         pane.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Preview song', () => { P.audio.init(); P.audio.playCharSong(ch); }), btn('⏹ Stop', () => P.audio.stopSong())]));
         pane.appendChild(el('hr'));
         pane.appendChild(el('p', { class: 'help', html: `<b>Your own song.</b> Upload any length of audio, then pick the best <b>${B.SNIP_MAX} seconds</b> with the waveform editor. Only the snippet is saved (in your browser, with this fighter).` }));
-        pane.appendChild(row('Upload audio (mp3/ogg/wav/m4a)', el('input', { type: 'file', accept: 'audio/*', onchange: (e) => B.loadSong(e) })));
+        pane.appendChild(row('Upload audio (mp3/ogg/wav/m4a)', el('input', { type: 'file', accept: 'audio/*', onchange: (e) => B.loadSong(e, 'song', B.SNIP_MAX) })));
         pane.appendChild(row('...or paste a direct audio URL', el('div', { class: 'inline' }, [el('input', { type: 'text', id: 'song-url', placeholder: 'https://example.com/song.mp3' }), btn('Fetch', () => { const u = document.getElementById('song-url').value.trim(); if (u) B.loadSongUrl(u); })]), 'The server must allow cross-origin audio (many do not). Uploading a file always works.'));
         pane.appendChild(B.snippetEditor(ch));
         pane.appendChild(el('hr'));
-        pane.appendChild(btn('🎤 Preview full walk-on (song + announcer)', () => B.previewEntrance(), 'primary'));
+        pane.appendChild(btn('🎬 Preview the whole walk-on (song + announcer + behaviour)', () => B.playWalkOn(), 'primary'));
         break;
       }
       case 'png': {
@@ -139,20 +152,23 @@ window.P = window.P || {};
         }
         break;
       }
+      case 'voice': B.voiceTab(ch, pane); break;
       case 'rig': { const box = el('div'); pane.appendChild(box); P.rig.editor(box, ch, () => { }); break; }
     }
     B.drawThumbs();
   };
-  B.SNIP_MAX = 20;
-  B.loadSong = (e) => { const f = e.target.files[0]; if (!f) return; f.arrayBuffer().then(B.decodeSong).catch(() => alert('Could not decode that audio file.')); e.target.value = ''; };
-  B.loadSongUrl = (u) => fetch(u).then(r => r.arrayBuffer()).then(B.decodeSong).catch(() => alert('Could not fetch that URL (the server probably blocks cross-origin audio). Download it and upload the file instead.'));
-  B.decodeSong = async (ab) => {
-    const buf = await P.audio.decode(ab); B.snip = { buffer: buf, dur: buf.duration, start: 0, len: Math.min(B.SNIP_MAX, buf.duration), saved: false }; B.refresh();
+  B.SNIP_MAX = 20; B.VO_MAX = 8;
+  B.loadSong = (e, target, max) => { const f = e.target.files[0]; if (!f) return; f.arrayBuffer().then(ab => B.decodeSong(ab, target, max)).catch(() => alert('Could not decode that audio file.')); e.target.value = ''; };
+  B.loadSongUrl = (u) => fetch(u).then(r => r.arrayBuffer()).then(ab => B.decodeSong(ab, 'song', B.SNIP_MAX)).catch(() => alert('Could not fetch that URL (the server probably blocks cross-origin audio). Download it and upload the file instead.'));
+  B.decodeSong = async (ab, target = 'song', max = B.SNIP_MAX) => {
+    const buf = await P.audio.decode(ab);
+    B.snip = { buffer: buf, dur: buf.duration, start: 0, len: Math.min(max, buf.duration), max, target, saved: false }; B.refresh();
   };
-  B.snippetEditor = (ch) => {
+  B.snippetEditor = (ch, target = 'song') => {
     const wrap = el('div', { class: 'wave' });
-    const s = B.snip;
-    if (!s) { if (ch.song.type === 'custom' && ch.song.custom) wrap.appendChild(el('div', { class: 'muted', html: `Current custom snippet: <b>${U.esc(ch.song.name || 'custom audio')}</b> (${ch.song.len ? ch.song.len.toFixed(1) + 's' : 'trimmed'}). Upload a file to pick a new snippet.` })); else wrap.appendChild(el('div', { class: 'muted', text: 'No custom audio loaded yet.' })); return wrap; }
+    const s = B.snip && B.snip.target === target ? B.snip : null;
+    if (!s) { if (target === 'song' && ch.song.type === 'custom' && ch.song.custom) wrap.appendChild(el('div', { class: 'muted', html: `Current custom snippet: <b>${U.esc(ch.song.name || 'custom audio')}</b> (${ch.song.len ? ch.song.len.toFixed(1) + 's' : 'trimmed'}). Upload a file to pick a new snippet.` })); return wrap; }
+    const MAX = s.max || B.SNIP_MAX;
     const cv = el('canvas', { width: 800, height: 140, class: 'wavecv' }); wrap.appendChild(cv);
     const info = el('div', { class: 'muted' }); wrap.appendChild(info);
     const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height; const data = s.buffer.getChannelData(0);
@@ -165,20 +181,88 @@ window.P = window.P || {};
       for (let x = 0; x < W; x++) { const h = peaks[x] * (H - 10); ctx.fillStyle = x >= x0 && x <= x1 ? '#ffd23f' : '#777'; ctx.fillRect(x, H / 2 - h / 2, 1, Math.max(1, h)); }
       ctx.fillStyle = '#fff'; ctx.fillRect(x0 - 3, 0, 6, H); ctx.fillRect(x1 - 3, 0, 6, H);
       if (B.snipPlayhead != null) { ctx.fillStyle = '#5f5'; ctx.fillRect(px(B.snipPlayhead), 0, 2, H); }
-      info.textContent = `Track: ${s.dur.toFixed(1)}s · Snippet: ${s.start.toFixed(1)}s → ${(s.start + s.len).toFixed(1)}s (${s.len.toFixed(1)}s, max ${B.SNIP_MAX}s). Drag the window to move it, drag its edges to resize.`;
+      info.textContent = `Track: ${s.dur.toFixed(1)}s · Snippet: ${s.start.toFixed(1)}s → ${(s.start + s.len).toFixed(1)}s (${s.len.toFixed(1)}s, max ${MAX}s). Drag the window to move it, drag its edges to resize.`;
     };
     let drag = null;
     const pos = (e) => { const r = cv.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return (t.clientX - r.left) * W / r.width; };
     const down = (e) => { const x = pos(e), x0 = px(s.start), x1 = px(s.start + s.len); if (Math.abs(x - x0) < 12) drag = { kind: 'l' }; else if (Math.abs(x - x1) < 12) drag = { kind: 'r' }; else if (x > x0 && x < x1) drag = { kind: 'm', off: sec(x) - s.start }; else { s.start = U.clamp(sec(x) - s.len / 2, 0, s.dur - s.len); drag = { kind: 'm', off: s.len / 2 }; } draw(); e.preventDefault(); };
-    const move = (e) => { if (!drag) return; const t = sec(pos(e)); if (drag.kind === 'm') s.start = U.clamp(t - drag.off, 0, s.dur - s.len); else if (drag.kind === 'l') { const end = s.start + s.len; s.start = U.clamp(t, Math.max(0, end - B.SNIP_MAX), end - 1); s.len = end - s.start; } else { s.len = U.clamp(t - s.start, 1, Math.min(B.SNIP_MAX, s.dur - s.start)); } draw(); e.preventDefault(); };
+    const move = (e) => { if (!drag) return; const t = sec(pos(e)); if (drag.kind === 'm') s.start = U.clamp(t - drag.off, 0, s.dur - s.len); else if (drag.kind === 'l') { const end = s.start + s.len; s.start = U.clamp(t, Math.max(0, end - MAX), end - 0.5); s.len = end - s.start; } else { s.len = U.clamp(t - s.start, 0.5, Math.min(MAX, s.dur - s.start)); } draw(); e.preventDefault(); };
     const up = () => { drag = null; };
     cv.addEventListener('mousedown', down); cv.addEventListener('mousemove', move); window.addEventListener('mouseup', up); cv.addEventListener('touchstart', down, { passive: false }); cv.addEventListener('touchmove', move, { passive: false }); cv.addEventListener('touchend', up);
     const play = () => { B.stopSnip(); const ac = P.audio.init(); const src = ac.createBufferSource(); src.buffer = s.buffer; const g = ac.createGain(); g.gain.value = P.audio.settings.music; src.connect(g); g.connect(ac.destination); src.start(0, s.start, s.len); const t0 = ac.currentTime; B.snipSrc = src; const tick = () => { if (B.snipSrc !== src) return; B.snipPlayhead = s.start + (ac.currentTime - t0); if (B.snipPlayhead > s.start + s.len) { B.snipPlayhead = null; B.snipSrc = null; } draw(); if (B.snipSrc) requestAnimationFrame(tick); }; tick(); src.onended = () => { if (B.snipSrc === src) { B.snipSrc = null; B.snipPlayhead = null; draw(); } }; };
-    wrap.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Play snippet', play), btn('⏹ Stop', B.stopSnip), btn(s.saved ? '✓ Saved as walk-on' : '💾 Use this snippet as walk-on song', async () => { const url = await P.audio.snippetToWav(s.buffer, s.start, s.len); ch.song = { type: 'custom', id: ch.song.id, custom: url, name: 'your snippet', len: s.len }; s.saved = true; B.refresh(); }, 'primary')]));
+    wrap.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Play snippet', play), btn('⏹ Stop', B.stopSnip), btn(s.saved ? '✓ Saved' : (target === 'song' ? '💾 Use this snippet as walk-on song' : '💾 Save this voice line'), async () => {
+      const url = await P.audio.snippetToWav(s.buffer, s.start, s.len);
+      if (target === 'song') ch.song = { type: 'custom', id: ch.song.id, custom: url, name: 'your snippet', len: s.len };
+      else { const ev = target.slice(3); ch.vo = ch.vo || {}; ch.vo[ev] = { url, name: 'your clip', len: s.len }; }
+      s.saved = true; B.snip = null; B.refresh();
+    }, 'primary')]));
     draw();
     return wrap;
   };
   B.stopSnip = () => { if (B.snipSrc) { try { B.snipSrc.stop(); } catch (e) { } B.snipSrc = null; B.snipPlayhead = null; } };
+  // ---- recorded voice lines ----
+  B.recording = null;
+  B.record = async (ch, ev) => {
+    if (B.recording) return B.stopRecord();
+    if (!navigator.mediaDevices || !window.MediaRecorder) { alert('This browser cannot record audio. Upload a file instead.'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream); const chunks = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        const rd = new FileReader(); rd.onload = () => { ch.vo = ch.vo || {}; ch.vo[ev] = { url: rd.result, name: 'recording' }; B.recording = null; B.refresh(); }; rd.readAsDataURL(blob);
+      };
+      B.recording = { rec, ev }; rec.start(); B.refresh();
+      setTimeout(() => { if (B.recording && B.recording.rec === rec && rec.state === 'recording') B.stopRecord(); }, B.VO_MAX * 1000);
+    } catch (e) { alert('Could not use the microphone: ' + e.message); }
+  };
+  B.stopRecord = () => { if (B.recording && B.recording.rec.state === 'recording') B.recording.rec.stop(); };
+  B.voiceTab = (ch, pane) => {
+    pane.appendChild(el('p', { class: 'help', html: `Record or upload a clip for each moment. Clips are capped at <b>${B.VO_MAX} seconds</b> and stored with the fighter. The game spaces them out so nobody spams the same line: at most one clip every few seconds overall, and each fighter's own line has its own cooldown.` }));
+    for (const [ev, label, when] of P.voice.EVENTS) {
+      const cur = ch.vo && ch.vo[ev];
+      const recording = B.recording && B.recording.ev === ev;
+      pane.appendChild(el('div', { class: 'vorow' }, [
+        el('div', { class: 'volabel' }, [el('b', { text: label }), el('small', { text: when })]),
+        el('div', { class: 'btnrow' }, [
+          el('button', { class: 'btn small' + (recording ? ' danger' : ''), text: recording ? '⏺ Recording... click to stop' : '🎤 Record', onclick: () => recording ? B.stopRecord() : B.record(ch, ev) }),
+          el('label', { class: 'btn small' }, ['⬆ Upload', el('input', { type: 'file', accept: 'audio/*', hidden: 'hidden', onchange: (e) => B.loadSong(e, 'vo:' + ev, B.VO_MAX) })]),
+          cur ? btn('▶', () => P.voice.playClip(cur.url), 'small') : null,
+          cur ? btn('✕', () => { delete ch.vo[ev]; B.refresh(); }, 'small danger') : null,
+          el('span', { class: 'muted', text: cur ? 'clip saved' + (cur.len ? ' (' + cur.len.toFixed(1) + 's)' : '') : 'no clip — the game falls back to text-to-speech' }),
+        ]),
+        B.snip && B.snip.target === 'vo:' + ev ? B.snippetEditor(ch, 'vo:' + ev) : null,
+      ]));
+    }
+  };
+
+  // ---- walk-on behaviour preview ----
+  B.playWalkOn = () => {
+    const ch = B.ch; B.stopWalkOn();
+    P.audio.init(); P.audio.playCharSong(ch); P.voice.stop();
+    const steps = P.rumble.entranceScript({ ch });
+    B.walk = { steps, i: 0, t: 0 };
+    P.voice.say(P.data.ANN.intro(ch, 1), { role: 'ann', priority: 3 })
+      .then(() => { if (!B.walk) return; if (P.voice.vo(ch, 'entrance', { force: true })) return; return P.voice.say(ch.catchphrase, { role: 'fighter', priority: 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); });
+  };
+  B.stopWalkOn = () => { B.walk = null; P.audio.stopSong(); P.voice.stop(); };
+  B.walkStep = (dt) => {
+    const w = B.walk; if (!w) return null;
+    w.t += dt; const step = w.steps[w.i];
+    if (!step) { B.walk = null; P.audio.stopSong(); return null; }
+    const durOf = (st) => st.type === 'walk' ? 1.6 : st.type === 'anim' ? st.dur : st.type === 'fall' ? st.dur : 1.4;
+    const dur = durOf(step);
+    if (w.t >= dur) { w.i++; w.t = 0; return B.walkStep(0); }
+    if (step.type === 'walk') return { anim: step.anim, opts: { speed: (step.speed || 1) * 2 } };
+    if (step.type === 'anim') return { anim: step.anim, opts: {} };
+    if (step.type === 'fall') return { anim: 'lying', opts: { dir: 1, expr: 'happy' } };
+    const p = U.clamp(w.t / dur, 0, 1);
+    const map = { jump: 'jump', dive: 'dive', climb: 'climb', trip: 'fly', shoved: 'fly', float: 'float', crawl: 'jump', teleport: 'cast' };
+    return { anim: map[step.style] || 'jump', opts: { p, spin: 7 }, jump: -Math.sin(p * Math.PI) * 40 };
+  };
+
   B.loadPng = (e, slot, key) => { const f = e.target.files[0]; if (!f) return; if (f.size > 1.5 * 1024 * 1024) { alert('Keep PNGs under 1.5MB; they live in your browser storage.'); return; } const rd = new FileReader(); rd.onload = () => { B.ch.custom[slot] = B.ch.custom[slot] || {}; B.ch.custom[slot][key] = rd.result; delete P.items.imgCache[rd.result]; B.refresh(); }; rd.readAsDataURL(f); };
   B.downloadTemplate = (slot) => {
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512; const ctx = cv.getContext('2d'); const D = P.draw;
@@ -199,9 +283,9 @@ window.P = window.P || {};
   };
   B.save = () => {
     if (!B.ch.name.trim()) B.ch.name = C.randomName();
-    P.app.upsert(B.ch); B.stopPreview(); B.stopSnip(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster');
+    P.app.upsert(B.ch); B.stopPreview(); B.stopSnip(); B.stopWalkOn(); P.audio.stopSong(); P.voice.stop(); P.app.show('roster');
   };
-  B.cancel = () => { B.stopPreview(); B.stopSnip(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster'); };
+  B.cancel = () => { B.stopPreview(); B.stopSnip(); B.stopWalkOn(); B.stopWalkOn(); P.audio.stopSong(); P.voice.stop(); P.app.show('roster'); };
   B.randomize = () => { const keepName = B.ch.name; B.ch = C.random(); if (keepName) B.ch.name = keepName; B.refresh(); };
   B.setAnim = (a) => { B.previewAnim = a; };
 })();
