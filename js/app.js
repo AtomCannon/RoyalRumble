@@ -3,7 +3,7 @@ window.P = window.P || {};
 (function () {
   const U = P.util, el = U.el, C = P.char;
   const App = P.app = { roster: [], screen: 'roster', selected: new Set() };
-  App.settings = Object.assign({ interval: 12, chaos: 1, speed: 1, hp: 100 }, U.load('punchma.settings', {}));
+  App.settings = Object.assign({ interval: 20, chaos: 1, speed: 1, hp: 100 }, U.load('punchma.settings', {}));
 
   App.show = (name) => { App.screen = name; document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + name)); document.querySelectorAll('nav button[data-screen]').forEach(b => b.classList.toggle('on', b.dataset.screen === name)); if (name === 'roster') App.renderRoster(); window.scrollTo(0, 0); };
   App.saveRoster = () => { if (!U.save('punchma.roster', App.roster)) alert('Could not save roster. Your browser storage may be full (custom PNGs and songs count). Try removing some.'); };
@@ -35,13 +35,14 @@ window.P = window.P || {};
   App.updateStartBtn = () => { const n = [...App.selected].filter(id => App.roster.some(c => c.id === id)).length; const b = document.getElementById('start-btn'); b.textContent = n >= 2 ? `🔔 START PUNCHMA (${n} idiots)` : 'Select at least 2 fighters'; b.disabled = n < 2; };
   App.selectAll = (on) => { App.selected = new Set(on ? App.roster.map(c => c.id) : []); App.renderRoster(); };
 
-  App.startRumble = () => {
+  App.startRumble = (scripted) => {
     const chars = App.roster.filter(c => App.selected.has(c.id)); if (chars.length < 2) return;
+    const script = scripted ? P.script.current : null; App.lastScripted = !!scripted;
     App.settings.interval = +document.getElementById('set-interval').value; App.settings.chaos = +document.getElementById('set-chaos').value; App.settings.speed = +document.getElementById('set-speed').value; U.save('punchma.settings', App.settings);
     App.show('rumble'); document.getElementById('winner-overlay').classList.remove('on');
     P.audio.init();
     P.rumble.onEnd = (f) => { for (const c of chars) c.stats.rumbles++; const w = App.roster.find(c => c.id === f.ch.id); if (w) w.stats.wins++; for (const id in P.rumble.elims) { const c = App.roster.find(x => x.id === id); if (c) c.stats.elims += P.rumble.elims[id]; } App.saveRoster(); App.showWinner(f); };
-    P.rumble.start(chars, App.settings);
+    P.rumble.start(chars, App.settings, script);
     App.lastChars = chars;
   };
   App.showWinner = (f) => {
@@ -51,16 +52,77 @@ window.P = window.P || {};
     const em = P.rumble.elims; const topId = Object.keys(em).sort((a, b) => em[b] - em[a])[0]; const top = topId && App.lastChars.find(c => c.id === topId);
     document.getElementById('winner-stats').textContent = `${em[f.ch.id] || 0} eliminations · Most violent: ${top ? top.name + ' (' + em[topId] + ')' : 'nobody, somehow'} · ${P.rumble.total} entrants`;
   };
-  App.rematch = () => { document.getElementById('winner-overlay').classList.remove('on'); P.rumble.stop(); P.rumble.onEnd = null; setTimeout(App.startRumble, 50); };
+  App.rematch = () => { document.getElementById('winner-overlay').classList.remove('on'); P.rumble.stop(); P.rumble.onEnd = null; setTimeout(() => App.startRumble(App.lastScripted), 50); };
   App.leaveRumble = () => { P.rumble.stop(); document.getElementById('winner-overlay').classList.remove('on'); App.show('roster'); };
 
   App.exportRoster = () => { const blob = new Blob([JSON.stringify(App.roster, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'punchma-roster.json'; a.click(); };
   App.importRoster = (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const arr = JSON.parse(rd.result); if (!Array.isArray(arr)) throw 0; for (const c of arr) { const ch = C.normalize(c); if (App.roster.some(x => x.id === ch.id)) ch.id = U.uid(); App.roster.push(ch); App.selected.add(ch.id); } App.saveRoster(); App.renderRoster(); } catch (err) { alert('That is not a Punchma roster file. Or it is, and it is broken. Either way, no.'); } }; rd.readAsText(f); e.target.value = ''; };
 
   App.audioUI = () => {
-    const s = P.audio.settings; const m = document.getElementById('vol-music'), x = document.getElementById('vol-sfx'), v = document.getElementById('voice-on');
-    m.value = s.music; x.value = s.sfx; v.checked = s.voice;
-    m.oninput = () => { s.music = +m.value; P.audio.applySettings(); P.audio.saveSettings(); }; x.oninput = () => { s.sfx = +x.value; P.audio.applySettings(); P.audio.saveSettings(); }; v.onchange = () => { s.voice = v.checked; if (!v.checked) P.audio.shutUp(); P.audio.saveSettings(); };
+    const s = P.audio.settings; const m = document.getElementById('vol-music'), x = document.getElementById('vol-sfx');
+    m.value = s.music; x.value = s.sfx;
+    m.oninput = () => { s.music = +m.value; P.audio.applySettings(); P.audio.saveSettings(); }; x.oninput = () => { s.sfx = +x.value; P.audio.applySettings(); P.audio.saveSettings(); };
+  };
+
+  // ---- voice settings modal ----
+  App.voiceUI = () => {
+    const V = P.voice, box = document.getElementById('voice-body'); box.innerHTML = '';
+    const s = V.s; const rowEl = (l, input, hint) => el('label', { class: 'ctl' }, [el('span', { class: 'ctl-l', text: l }), input, hint ? el('small', { text: hint }) : null]);
+    const sel = (val, opts, on) => { const e = el('select', { onchange: (ev) => { on(ev.target.value); V.save(); } }); for (const [v, l] of opts) e.appendChild(el('option', { value: v, text: l, selected: v === val ? 'selected' : null })); return e; };
+    const txt = (val, on, ph) => el('input', { type: 'text', value: val, placeholder: ph || '', onchange: (ev) => { on(ev.target.value); V.save(); } });
+    box.appendChild(el('label', { class: 'mini' }, [el('input', { type: 'checkbox', checked: s.enabled ? 'checked' : null, onchange: (e) => { s.enabled = e.target.checked; if (!s.enabled) V.stop(); V.save(); } }), ' Voices on']));
+    box.appendChild(el('label', { class: 'mini' }, [el('input', { type: 'checkbox', checked: s.subtitles ? 'checked' : null, onchange: (e) => { s.subtitles = e.target.checked; V.save(); } }), ' Subtitles']));
+    box.appendChild(rowEl('Engine', sel(s.engine, [['browser', 'Browser voices (built in, quality varies by OS)'], ['server', 'Local TTS server (OpenAI-compatible, e.g. Kokoro-FastAPI) — most natural'], ['kokoro', 'Kokoro in the browser (experimental, ~90MB download, needs http(s))']], v => { s.engine = v; App.voiceUI(); })));
+    if (s.engine === 'server') {
+      box.appendChild(el('p', { class: 'help', html: 'Run an open-source TTS with an OpenAI-style <code>/v1/audio/speech</code> endpoint. Easiest: <b>Kokoro-FastAPI</b> (<code>docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest</code>), then use voices like am_michael, am_adam, af_bella, am_puck, bm_george, af_heart.' }));
+      box.appendChild(rowEl('Server URL', txt(s.serverUrl, v => s.serverUrl = v, 'http://localhost:8880')));
+      box.appendChild(rowEl('Model name', txt(s.serverModel, v => s.serverModel = v, 'kokoro')));
+    }
+    if (s.engine === 'kokoro') {
+      box.appendChild(el('p', { class: 'help', html: 'Loads <code>kokoro-js</code> from a CDN and runs the Kokoro-82M model in your browser (WebGPU if available, else WASM). First use downloads ~90MB. Does not work when the game is opened from a file:// path.' }));
+      box.appendChild(rowEl('kokoro-js module URL', txt(s.kokoroUrl, v => s.kokoroUrl = v)));
+      box.appendChild(rowEl('Precision', sel(s.kokoroDtype, [['q8', 'q8 (fast, ~90MB)'], ['fp32', 'fp32 (best, ~330MB)']], v => s.kokoroDtype = v)));
+    }
+    const voices = V.browserVoices();
+    for (const role in V.ROLES) {
+      const r = s.roles[role]; const g = el('fieldset', { class: 'rolebox' }, [el('legend', { text: V.ROLES[role] })]);
+      if (s.engine === 'browser') g.appendChild(rowEl('Voice', sel(r.browser, [['', 'Auto pick']].concat(voices.map(v => [v.name, v.name + ' (' + v.lang + ')'])), v => r.browser = v)));
+      else g.appendChild(rowEl('Voice id', txt(r[s.engine], v => r[s.engine] = v)));
+      g.appendChild(rowEl('Pitch (browser only) ' + r.pitch, el('input', { type: 'range', min: 0.5, max: 1.6, step: 0.05, value: r.pitch, onchange: (e) => { r.pitch = +e.target.value; V.save(); App.voiceUI(); } })));
+      g.appendChild(rowEl('Speed ' + r.rate, el('input', { type: 'range', min: 0.6, max: 1.6, step: 0.05, value: r.rate, onchange: (e) => { r.rate = +e.target.value; V.save(); App.voiceUI(); } })));
+      g.appendChild(el('button', { class: 'btn small', text: '🔊 Test', onclick: () => V.test(role) }));
+      box.appendChild(g);
+    }
+    box.appendChild(el('div', { class: 'btnrow' }, [el('button', { class: 'btn', text: 'Reset voices to defaults', onclick: () => { V.s = V.defaults(); V.save(); App.voiceUI(); } })]));
+  };
+  App.openVoices = () => { App.voiceUI(); document.getElementById('voice-modal').classList.add('on'); };
+
+  // ---- scripted show panel ----
+  App.scriptUI = () => {
+    const S = P.script, box = document.getElementById('script-body'); box.innerHTML = '';
+    const cur = S.current; const chars = () => App.roster.filter(c => App.selected.has(c.id));
+    box.appendChild(el('p', { class: 'help', html: 'Want a curated show instead of pure chaos? <b>1.</b> Copy the prompt (it includes your selected fighters). <b>2.</b> Paste it into any LLM: a local Qwen in Ollama or LM Studio, or anything else. <b>3.</b> Paste the JSON it writes back below. The game then plays that story: entrance order, custom moves, callbacks, eliminations and the winner, with the commentators reading the script\'s lines.' }));
+    const ta = el('textarea', { id: 'script-in', rows: 6, placeholder: 'Paste the JSON script here...' });
+    const status = el('div', { class: 'muted', id: 'script-status' });
+    const load = (text) => { try { const raw = S.parse(text); const prep = S.prepare(raw, chars()); S.current = raw; U.save('punchma.script', raw); status.textContent = `Loaded "${raw.title || 'untitled'}": ${prep.beats.length} beats. ` + (prep.warnings.length ? 'Warnings: ' + prep.warnings.join(' | ') : 'Looks good.'); App.scriptUI(); document.getElementById('script-status').textContent = status.textContent; } catch (e) { status.textContent = 'Could not read that: ' + e.message; } };
+    box.appendChild(el('div', { class: 'btnrow' }, [
+      el('button', { class: 'btn', text: '📋 Copy prompt for your LLM', onclick: () => { const p = S.buildPrompt(chars()); ta.value = ''; navigator.clipboard && navigator.clipboard.writeText(p).then(() => status.textContent = 'Prompt copied to clipboard. Paste it into your LLM, then paste its JSON answer below.', () => { ta.value = p; status.textContent = 'Clipboard blocked; the prompt is in the box below. Copy it from there.'; }); if (!navigator.clipboard) { ta.value = p; status.textContent = 'The prompt is in the box below. Copy it from there.'; } } }),
+      el('button', { class: 'btn', text: '⬇ Download prompt (.txt)', onclick: () => { const b = new Blob([S.buildPrompt(chars())], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'punchma-prompt.txt'; a.click(); } }),
+    ]));
+    box.appendChild(el('details', {}, [el('summary', { text: '⚡ Or generate directly from a local LLM (Ollama / LM Studio / any OpenAI-compatible endpoint)' }), el('div', { class: 'inline' }, [
+      el('input', { type: 'text', value: S.llm.url, placeholder: 'http://localhost:11434/v1', onchange: (e) => { S.llm.url = e.target.value; S.saveLLM(); } }),
+      el('input', { type: 'text', value: S.llm.model, placeholder: 'model name, e.g. qwen3.5', onchange: (e) => { S.llm.model = e.target.value; S.saveLLM(); } }),
+      el('input', { type: 'password', value: S.llm.key, placeholder: 'api key (optional)', onchange: (e) => { S.llm.key = e.target.value; S.saveLLM(); } }),
+      el('button', { class: 'btn primary', text: 'Generate', onclick: async (e) => { e.target.disabled = true; status.textContent = 'Asking the LLM... (this can take a minute)'; try { const txt = await S.generateLocal(S.buildPrompt(chars())); ta.value = txt; load(txt); } catch (err) { status.textContent = 'Failed: ' + err.message + '. For Ollama set OLLAMA_ORIGINS=* ; in LM Studio enable CORS in the server settings.'; } e.target.disabled = false; } }),
+    ]), el('small', { class: 'muted', text: 'Ollama: run `OLLAMA_ORIGINS=* ollama serve` so the browser may call it. LM Studio: enable CORS in Developer > Server settings. Uses the /chat/completions endpoint.' })]));
+    box.appendChild(ta);
+    box.appendChild(el('div', { class: 'btnrow' }, [
+      el('button', { class: 'btn', text: '📥 Load script from box', onclick: () => load(ta.value) }),
+      el('label', { class: 'btn' }, ['📂 Load script file', el('input', { type: 'file', accept: '.json,.txt,application/json', hidden: 'hidden', onchange: (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => load(rd.result); rd.readAsText(f); e.target.value = ''; } })]),
+      cur ? el('button', { class: 'btn small danger', text: '✕ Clear loaded script', onclick: () => { S.current = null; localStorage.removeItem('punchma.script'); App.scriptUI(); } }) : null,
+    ]));
+    box.appendChild(status);
+    if (cur) { const prep = S.prepare(cur, chars()); box.appendChild(el('div', { class: 'scriptcard' }, [el('b', { text: '📜 ' + (cur.title || 'Untitled show') }), el('div', { class: 'muted', text: `${prep.beats.length} beats · order: ${prep.order.map(c => c.name).join(' → ')}` }), prep.warnings.length ? el('div', { class: 'warn', text: prep.warnings.join(' | ') }) : null, el('button', { class: 'btn primary huge', text: '🎬 PLAY THE SCRIPTED SHOW', onclick: () => App.startRumble(true) })])); }
   };
 
   // Default roster so the game is fun in 10 seconds
@@ -86,10 +148,10 @@ window.P = window.P || {};
     App.roster = (U.load('punchma.roster', null) || App.defaults()).map(C.normalize);
     App.selected = new Set(App.roster.map(c => c.id));
     if (!U.load('punchma.roster', null)) App.saveRoster();
-    App.audioUI();
+    App.audioUI(); App.scriptUI();
+    if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if (document.getElementById('voice-modal').classList.contains('on')) App.voiceUI(); };
     document.getElementById('set-interval').oninput = (e) => document.getElementById('set-interval-v').textContent = e.target.value + 's';
     document.addEventListener('keydown', (e) => { if (App.screen !== 'rumble') return; if (e.key === ' ') { e.preventDefault(); P.rumble.paused = !P.rumble.paused; } if (e.key === '1') P.rumble.speed = 1; if (e.key === '2') P.rumble.speed = 2; if (e.key === '4') P.rumble.speed = 4; });
-    if ('speechSynthesis' in window) speechSynthesis.getVoices();
     App.show('roster');
   };
   window.addEventListener('DOMContentLoaded', App.init);

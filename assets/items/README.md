@@ -50,3 +50,10 @@ That is what lets one hat fit a pea-headed gnome and a planet-headed lamp post.
   { "slot": "extra", "id": "laser", "name": "Laser Gun", "src": "assets/items/extra/laser.png", "layer": "hand" }
 ]
 ```
+
+## Rigging a whole character instead
+
+If you would rather draw the entire fighter yourself, use the builder's **Rig a PNG** tab: one transparent PNG of the full body,
+facing the viewer, idle pose, arms slightly out to the sides. Drag the dots onto the head center, head edge, neck, shoulders,
+elbows, hands, hips and feet, set the limb thickness, and the game slices the drawing into parts that animate. Hats and held
+accessories still work on top; built-in face parts can be drawn over the head if you tick that option.

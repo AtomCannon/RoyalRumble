@@ -17,6 +17,7 @@ window.P = window.P || {};
     g.hipY = -g.legLen; g.torsoTop = g.hipY - g.torsoH; g.headCY = g.torsoTop - g.neck - g.headH / 2;
     g.totalH = g.legLen + g.torsoH + g.neck + g.headH; g.shoulderY = g.hipY - g.torsoH * 0.82; g.shoulderX = g.torsoW * 0.32;
     g.width = Math.max(g.torsoW, g.headR * 2) + g.armUp * 0.8;
+    if (R.isRigged(ch)) { const rg = P.rig.build(ch); if (rg) { g.totalH = rg.totalH; g.width = rg.width; } }
     return g;
   };
 
@@ -61,21 +62,28 @@ window.P = window.P || {};
   };
   R.pose = (over) => Object.assign(R.defaultPose(), over || {});
 
-  // Draw a character with feet at (x,y), scale px per unit (before body.height multiplier)
-  R.draw = (ctx, ch, pose, x, y, scale) => {
-    pose = pose || R.defaultPose();
-    const g = R.geo(ch), b = ch.body, skin = b.skin, s = scale * b.height;
-    const inBox = D.inBox, cust = ch.custom || {};
-    ctx.save();
-    ctx.translate(x, y); ctx.scale(s, s);
-    ctx.globalAlpha = pose.alpha == null ? 1 : pose.alpha;
-    if (pose.shadow !== false && !pose.lying) { ctx.save(); ctx.globalAlpha *= 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(0, 2, g.width * 0.5, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  // Shared whole-body transform (lying, spin, jump, facing, lean, squash). Expects ctx already at the feet, scaled to units.
+  R.bodyTransform = (ctx, pose, g) => {
     if (pose.lying) { ctx.translate(0, -g.torsoW * 0.35); ctx.rotate(pose.lying * Math.PI / 2 * pose.facing); }
     if (pose.spin) { ctx.translate(0, -g.totalH / 2); ctx.rotate(pose.spin); ctx.translate(0, g.totalH / 2); }
     ctx.translate(0, (pose.jump || 0) + (pose.bob || 0));
     ctx.scale(pose.facing || 1, 1);
     if (pose.lean) ctx.rotate(pose.lean);
     if (pose.squash && pose.squash !== 1) ctx.scale(1 / pose.squash, pose.squash);
+  };
+  R.isRigged = (ch) => !!(ch.rig && ch.rig.src && ch.rig.enabled !== false && P.rig);
+
+  // Draw a character with feet at (x,y), scale px per unit (before body.height multiplier)
+  R.draw = (ctx, ch, pose, x, y, scale) => {
+    pose = pose || R.defaultPose();
+    if (R.isRigged(ch)) return P.rig.draw(ctx, ch, pose, x, y, scale);
+    const g = R.geo(ch), b = ch.body, skin = b.skin, s = scale * b.height;
+    const inBox = D.inBox, cust = ch.custom || {};
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(s, s);
+    ctx.globalAlpha = pose.alpha == null ? 1 : pose.alpha;
+    if (pose.shadow !== false && !pose.lying) { ctx.save(); ctx.globalAlpha *= 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(0, 2, g.width * 0.5, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    R.bodyTransform(ctx, pose, g);
 
     const draw = (slot, id, box, layer, extraArg) => {
       const cu = cust[slot];
@@ -101,7 +109,7 @@ window.P = window.P || {};
     // 1 back accessory
     if (ch.extra.id !== 'none' || extraCustom) { if (extraLayer === 'back') { if (extraCustom) inBox(ctx, torsoBox, (c) => D.png(c, cust.extra.src)); else inBox(ctx, torsoBox, (c) => extraIt.draw(c, ch, pose)); } }
     // 2 back hair
-    draw('hair', ch.hair.style, headBox, 'back');
+    if (!pose.hideHair) draw('hair', ch.hair.style, headBox, 'back');
     // 3 arms
     const arm = (sx, a, bend, front) => {
       const ex = sx + Math.sin(a) * g.armUp, ey = g.shoulderY + Math.cos(a) * g.armUp;
@@ -133,8 +141,8 @@ window.P = window.P || {};
     inBox(ctx, headBox, (c) => { (P.shapes.head[b.headShape] || P.shapes.head.round)(c); D.fs(c, skin); });
     if (pose.tint) inBox(ctx, headBox, (c) => { c.globalAlpha = 0.35; (P.shapes.head[b.headShape] || P.shapes.head.round)(c); D.fs(c, pose.tint, 0); c.globalAlpha = 1; });
     draw('eyes', ch.face.eyes, headBox, 'front'); draw('brows', ch.face.brows, headBox, 'front'); draw('nose', ch.face.nose, headBox, 'front'); draw('mouth', ch.face.mouth, headBox, 'front'); draw('beard', ch.face.beard, headBox, 'front');
-    draw('hair', ch.hair.style, headBox, 'front');
-    draw('hat', ch.hat.id, headBox, 'front');
+    if (!pose.hideHair) draw('hair', ch.hair.style, headBox, 'front');
+    if (!pose.hideHat) draw('hat', ch.hat.id, headBox, 'front');
     // 9 front arm + held item
     const hand = arm(g.shoulderX, pose.armF, pose.bendF, true);
     if ((ch.extra.id !== 'none' || extraCustom) && extraLayer === 'hand') {

@@ -9,7 +9,7 @@ No build step, no dependencies. Either:
 * open `index.html` in a browser (Chrome/Edge/Firefox/Safari), or
 * serve the folder (`python3 -m http.server`) / enable GitHub Pages on this repo. Serving over HTTP also enables PNG item packs (see below).
 
-Turn on 📣 in the header for the announcer; it uses your browser's built-in text-to-speech, so voices vary by device.
+Click 🎙 **Voices** in the header to pick the announcer and commentator voices (see *Voices* below).
 
 ## What's in the box
 
@@ -24,7 +24,7 @@ Rosters save to your browser's local storage; use Export/Import to move them aro
 
 ## Controls in the ring
 
-Space pauses. `1`, `2`, `4` set speed. "Next now" skips the wait for the next entrant.
+Space pauses. `1`, `2`, `4` set speed. "Next now" skips the wait for the next entrant (not during an entrance).
 
 ## Layout
 
@@ -36,8 +36,10 @@ js/data/            taglines, personas, moves + commentary lines
 js/items/           item system core, built-in art (vector, drawn in the same 512 space as PNGs), manifest loader
 js/character.js     character schema, random generator, default roster lives in app.js
 js/render.js        rig + animation presets + drawing
-js/audio.js         synthesized songs, SFX, crowd, speech
-js/announcer.js     commentary feed
+js/audio.js         synthesized songs, SFX, snippet rendering
+js/voice.js         speech queue, subtitles, TTS engines (browser / local server / in-browser Kokoro)
+js/script.js        LLM prompt export, script import + validation, local LLM call
+js/rig.js           PNG rig editor, slicer, rigged renderer
 js/builder.js       character builder UI
 js/rumble.js        simulation: entrances, combat, luck, eliminations, winner
 js/app.js           screens, roster storage, setup

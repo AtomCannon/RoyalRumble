@@ -2,7 +2,7 @@
 window.P = window.P || {};
 (function () {
   const U = P.util;
-  const A = P.audio = { ctx: null, master: null, musicGain: null, sfxGain: null, settings: { music: 0.6, sfx: 0.7, voice: true, crowd: 0.35 }, current: null, crowdNode: null };
+  const A = P.audio = { ctx: null, master: null, musicGain: null, sfxGain: null, settings: { music: 0.6, sfx: 0.7 }, current: null, crowdNode: null };
   A.settings = Object.assign(A.settings, U.load('punchma.audio', {}));
   A.saveSettings = () => U.save('punchma.audio', A.settings);
 
@@ -12,10 +12,8 @@ window.P = window.P || {};
     A.ctx = new AC(); A.master = A.ctx.createGain(); A.master.connect(A.ctx.destination);
     A.musicGain = A.ctx.createGain(); A.musicGain.gain.value = A.settings.music; A.musicGain.connect(A.master);
     A.sfxGain = A.ctx.createGain(); A.sfxGain.gain.value = A.settings.sfx; A.sfxGain.connect(A.master);
-    A.crowdGain = A.ctx.createGain(); A.crowdGain.gain.value = 0; A.crowdGain.connect(A.master);
     return A.ctx;
   };
-  A.applySettings = () => { if (!A.ctx) return; A.musicGain.gain.value = A.settings.music; A.sfxGain.gain.value = A.settings.sfx; if (A.audioEl) A.audioEl.volume = A.settings.music; };
 
   // ---- note helpers ----
   const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -124,25 +122,30 @@ window.P = window.P || {};
       case 'yay': noise(1.2, 'bandpass', 1200, 0.4, 800); for (let i = 0; i < 4; i++) tone('triangle', 400 + i * 150, null, 0.15, 0.1, i * 0.1); break;
     }
   };
-  // ambient crowd hum; level 0..1
-  A.crowd = (level) => {
-    const ctx = A.init(); if (!ctx) return;
-    if (!A.crowdNode) { const s = ctx.createBufferSource(); s.buffer = A._noise || (A._noise = noiseBuffer()); s.loop = true; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.6; s.connect(f); f.connect(A.crowdGain); s.start(); A.crowdNode = s; }
-    A.crowdGain.gain.linearRampToValueAtTime(level * A.settings.crowd * 0.5, ctx.currentTime + 0.5);
-  };
-  A.stopCrowd = () => { if (A.crowdGain && A.ctx) A.crowdGain.gain.linearRampToValueAtTime(0, A.ctx.currentTime + 0.5); };
+  // ---- speech lives in voice.js; keep thin aliases ----
+  A.say = (text, o) => P.voice ? P.voice.say(text, o) : Promise.resolve();
+  A.shutUp = () => { if (P.voice) P.voice.stop(); };
+  // duck music while someone talks
+  A.duck = (on) => { if (!A.ctx) return; const g = A.settings.music * (on ? 0.3 : 1); A.musicGain.gain.linearRampToValueAtTime(g, A.ctx.currentTime + 0.25); if (A.audioEl) A.audioEl.volume = g; };
+  A.applySettings = () => { if (!A.ctx) return; A.musicGain.gain.value = A.settings.music; A.sfxGain.gain.value = A.settings.sfx; if (A.audioEl) A.audioEl.volume = A.settings.music; };
 
-  // ---- Speech (announcer) ----
-  A.say = (text, opts = {}) => new Promise((resolve) => {
-    if (!A.settings.voice || !('speechSynthesis' in window) || !text) return resolve();
-    try {
-      const u = new SpeechSynthesisUtterance(text); u.pitch = U.clamp(opts.pitch ?? 0.7, 0, 2); u.rate = U.clamp(opts.rate ?? 1.0, 0.1, 3); u.volume = 1;
-      const voices = speechSynthesis.getVoices(); if (voices.length) { const v = voices.find(v => /en/i.test(v.lang) && /Google|Daniel|Alex|Samantha|Microsoft/i.test(v.name)) || voices.find(v => /en/i.test(v.lang)) || voices[0]; u.voice = v; }
-      let done = false; const fin = () => { if (!done) { done = true; resolve(); } };
-      u.onend = fin; u.onerror = fin; setTimeout(fin, Math.min(15000, 2500 + text.length * 80)); // safety timeout
-      if (opts.interrupt !== false) speechSynthesis.cancel();
-      speechSynthesis.speak(u);
-    } catch (e) { resolve(); }
-  });
-  A.shutUp = () => { try { speechSynthesis.cancel(); } catch (e) { } };
+  // ---- helpers for the snippet editor ----
+  A.decode = async (arrayBuffer) => { const ctx = A.init(); return await ctx.decodeAudioData(arrayBuffer.slice(0)); };
+  // Render [start, start+len] of an AudioBuffer to a mono 22050 Hz WAV data URL
+  A.snippetToWav = async (buffer, start, len) => {
+    const rate = 22050, frames = Math.max(1, Math.floor(len * rate));
+    const off = new OfflineAudioContext(1, frames, rate); const src = off.createBufferSource(); src.buffer = buffer;
+    const g = off.createGain(); g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(1, 0.05); g.gain.setValueAtTime(1, Math.max(0.05, len - 0.3)); g.gain.linearRampToValueAtTime(0, len);
+    src.connect(g); g.connect(off.destination); src.start(0, start, len);
+    const out = await off.startRendering();
+    const blob = A.wavBlob(out.getChannelData(0), rate);
+    return new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsDataURL(blob); });
+  };
+  A.wavBlob = (samples, rate) => {
+    const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { const x = Math.max(-1, Math.min(1, samples[i])); v.setInt16(44 + i * 2, x < 0 ? x * 32768 : x * 32767, true); }
+    return new Blob([buf], { type: 'audio/wav' });
+  };
 })();

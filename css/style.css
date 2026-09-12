@@ -74,7 +74,7 @@ select, input[type=text] { font: inherit; font-size: 14px; padding: 5px 8px; bor
 .ringbar { display: flex; gap: 6px; align-items: center; margin-top: 10px; flex-wrap: wrap; background: var(--paper); border: 3px solid var(--ink); padding: 6px 10px; box-shadow: var(--shadow); }
 .ringbar .next { font-weight: bold; }
 .ringbar .spacer { flex: 1; }
-.side { flex: 0 0 320px; background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); padding: 10px; max-height: calc(100vh - 110px); display: flex; flex-direction: column; }
+.side-unused { flex: 0 0 320px; background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); padding: 10px; max-height: calc(100vh - 110px); display: flex; flex-direction: column; }
 .side h3 { margin: 4px 0; font-size: 20px; }
 #hud-list { max-height: 34%; overflow: auto; font-size: 13px; }
 .hrow { display: flex; gap: 6px; align-items: center; padding: 2px 0; }
@@ -107,3 +107,31 @@ select, input[type=text] { font: inherit; font-size: 14px; padding: 5px 8px; bor
   header h1 { font-size: 30px; }
   nav .audio { margin-left: 0; }
 }
+
+/* ---- rumble v2: stage, subtitles, chips ---- */
+.stage { position: relative; }
+.subtitle { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); max-width: 82%; background: rgba(0,0,0,.78); color: #fff; padding: 8px 16px; border: 3px solid var(--ink); font-size: clamp(12px, 1.6vw, 20px); line-height: 1.3; display: none; text-align: center; box-shadow: 4px 4px 0 #000; pointer-events: none; }
+.subtitle.on { display: block; }
+.subtitle .who { font-family: Impact, "Arial Black", sans-serif; letter-spacing: 1px; margin-right: 8px; color: var(--yel); }
+.subtitle .who[data-role=gary] { color: #ffd23f; } .subtitle .who[data-role=tonya] { color: #7bd7ff; } .subtitle .who[data-role=ann] { color: #ff8a8a; } .subtitle .who[data-role=fighter] { color: #9f9; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--paper); border: 2px solid var(--ink); padding: 2px 8px; font-size: 12px; box-shadow: 2px 2px 0 var(--ink); }
+.chip.out { opacity: .4; text-decoration: line-through; } .chip.win { background: var(--yel); }
+.chip .hbar { width: 50px; height: 8px; border: 2px solid var(--ink); background: #333; } .chip .hbar i { display: block; height: 100%; }
+/* modal */
+.modalbox { max-width: 720px; text-align: left; max-height: 90vh; overflow: auto; animation: none; }
+.modalhead { display: flex; justify-content: space-between; align-items: center; } .modalhead h2 { margin: 0; }
+.rolebox { border: 2px solid var(--ink); margin: 8px 0; padding: 6px 10px; background: #fff; } .rolebox legend { font-weight: bold; font-family: Impact, sans-serif; letter-spacing: 1px; }
+.rolebox .ctl { margin-bottom: 6px; } .rolebox input[type=range] { width: 100%; }
+.mini { display: inline-block; margin-right: 14px; }
+/* script panel */
+#script-in { width: 100%; font: 12px monospace; border: 3px solid var(--ink); padding: 6px; margin-top: 8px; }
+.scriptcard { margin-top: 10px; background: #fff; border: 3px solid var(--ink); padding: 10px; box-shadow: var(--shadow); }
+.scriptcard .warn { color: #a33; font-size: 12px; margin: 4px 0; }
+details summary { cursor: pointer; font-weight: bold; margin: 8px 0 4px; }
+details .inline { margin: 6px 0; } details input[type=text], details input[type=password] { flex: 1; min-width: 140px; }
+/* waveform snippet editor */
+.wave { margin: 8px 0; } .wavecv { width: 100%; height: 140px; border: 3px solid var(--ink); cursor: ew-resize; display: block; background: #222; }
+/* rig editor */
+.rigcv { width: 100%; max-width: 520px; border: 3px solid var(--ink); display: block; cursor: grab; touch-action: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; margin-top: 6px; } .legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--ink); vertical-align: middle; }

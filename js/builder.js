@@ -4,13 +4,14 @@ window.P = window.P || {};
   const U = P.util, el = U.el, C = P.char;
   const B = P.builder = { ch: null, tab: 'body', previewAnim: 'idle', raf: null, walkT: 0 };
 
+  B.blankFighter = () => { const ch = C.blank(); ch.hair.style = U.pick(['buzz', 'ponytail']); ch.shirt.id = 'none'; ch.pants.id = 'tighty'; ch.shoes.id = 'none'; ch.hat.id = 'none'; ch.extra.id = 'none'; ch.tag = { adj: U.pick(P.data.ADJ), noun: U.pick(P.data.NOUN) }; return ch; };
   B.open = (ch) => {
-    B.ch = C.normalize(ch ? U.deep(ch) : C.random()); B.origId = ch ? ch.id : null;
+    B.ch = C.normalize(ch ? U.deep(ch) : B.blankFighter()); B.origId = ch ? ch.id : null; B.tab = 'body'; B.snip = null;
     P.app.show('builder'); B.renderControls(); B.startPreview();
   };
   B.startPreview = () => {
     cancelAnimationFrame(B.raf); const cv = document.getElementById('preview'); let t0 = performance.now();
-    const loop = (now) => { const t = (now - t0) / 1000; const pose = P.render.pose(Object.assign({ t }, P.render.anim(B.previewAnim, t, { p: (Math.sin(t * 6) + 1) / 2, speed: 2 }))); if (B.previewAnim === 'walk') pose.facing = 1; P.render.portrait(cv, B.ch, pose, { bg: '#7fc8f8' }); B.raf = requestAnimationFrame(loop); };
+    const loop = (now) => { const t = (now - t0) / 1000; const pose = P.render.pose(Object.assign({ t }, P.render.anim(B.previewAnim, t, { p: (Math.sin(t * 6) + 1) / 2, speed: 2 }))); if (B.previewAnim === 'walk') pose.facing = 1; if (B.peek || B.tab === 'face') { pose.hideHat = true; pose.hideHair = true; } if (B.tab === 'hair') pose.hideHat = true; P.render.portrait(cv, B.ch, pose, { bg: '#7fc8f8' }); B.raf = requestAnimationFrame(loop); };
     B.raf = requestAnimationFrame(loop);
   };
   B.stopPreview = () => cancelAnimationFrame(B.raf);
@@ -41,7 +42,7 @@ window.P = window.P || {};
   B.refresh = () => { B.renderControls(); };
   B.refreshLight = () => { const h = document.getElementById('b-title'); if (h) h.textContent = C.fullTitle(B.ch); };
 
-  const TABS = [['body', 'Body'], ['head', 'Head & Face'], ['hair', 'Hair & Hat'], ['clothes', 'Clothes'], ['stuff', 'Stuff'], ['identity', 'Identity'], ['song', 'Walk-On'], ['png', 'Custom PNGs']];
+  const TABS = [['body', 'Body'], ['face', 'Face'], ['hair', 'Hair'], ['hat', 'Hat'], ['clothes', 'Clothes'], ['stuff', 'Stuff'], ['identity', 'Identity'], ['song', 'Walk-On'], ['png', 'Custom PNGs'], ['rig', 'Rig a PNG']];
 
   B.renderControls = () => {
     const ch = B.ch, root = document.getElementById('b-controls'); root.innerHTML = '';
@@ -56,7 +57,8 @@ window.P = window.P || {};
         pane.appendChild(row('Skin', el('div', {}, [swatches(C.SKINS, v => b.skin = v), color(b.skin, v => b.skin = v)])));
         pane.appendChild(el('div', { class: 'btnrow' }, [btn('🎲 Random body', () => { const r = C.random(); ch.body = r.body; B.refresh(); }), btn('Reset proportions', () => { Object.assign(b, { height: 1, girth: 1, headSize: 1, torsoLength: 1, armLength: 1, legLength: 1, limbThickness: 1, neckLength: 1 }); B.refresh(); })]));
         break;
-      case 'head':
+      case 'face':
+        pane.appendChild(el('p', { class: 'help', text: 'Hat and hair are hidden in the preview while you work on the face.' }));
         pane.appendChild(row('Head shape', select(b.headShape, C.HEAD_SHAPES, v => b.headShape = v)));
         pane.appendChild(row('Eyes', itemPicker('eyes', ch.face.eyes, v => ch.face.eyes = v)));
         pane.appendChild(row('Eyebrows', itemPicker('brows', ch.face.brows, v => ch.face.brows = v)));
@@ -66,8 +68,11 @@ window.P = window.P || {};
         pane.appendChild(row('Facial hair color', el('div', {}, [swatches(C.HAIR_COLORS, v => ch.face.facialHairColor = v), color(ch.face.facialHairColor, v => ch.face.facialHairColor = v)])));
         break;
       case 'hair':
+        pane.appendChild(el('p', { class: 'help', text: 'The hat is hidden in the preview while you pick hair.' }));
         pane.appendChild(row('Hair', itemPicker('hair', ch.hair.style, v => ch.hair.style = v)));
         pane.appendChild(row('Hair color', el('div', {}, [swatches(C.HAIR_COLORS, v => ch.hair.color = v), color(ch.hair.color, v => ch.hair.color = v)])));
+        break;
+      case 'hat':
         pane.appendChild(row('Hat', itemPicker('hat', ch.hat.id, v => ch.hat.id = v)));
         pane.appendChild(row('Hat colors', el('div', { class: 'inline' }, [color(ch.hat.color, v => ch.hat.color = v), color(ch.hat.color2, v => ch.hat.color2 = v)])));
         break;
@@ -100,16 +105,18 @@ window.P = window.P || {};
         pane.appendChild(row('Catchphrase (spoken on entrance)', el('div', {}, [text(ch.catchphrase, v => ch.catchphrase = v, 'Punchma balls!'), select('— pick one —', ['— pick one —'].concat(P.data.CATCHPHRASES), v => { if (v && v !== '— pick one —') ch.catchphrase = v; })])));
         pane.appendChild(row('Voice pitch', slider(ch.voice.pitch, 0.1, 2, v => ch.voice.pitch = v), 'Demon ⟵ ⟶ Chipmunk'));
         pane.appendChild(row('Voice speed', slider(ch.voice.rate, 0.5, 2, v => ch.voice.rate = v)));
-        pane.appendChild(btn('🔊 Test voice', () => { P.audio.say(ch.catchphrase || 'Punchma balls', { pitch: ch.voice.pitch, rate: ch.voice.rate }); }));
+        pane.appendChild(btn('🔊 Test voice', () => { P.voice.stop(); P.voice.say(ch.catchphrase || 'Punchma balls', { role: 'fighter', priority: 3, pitch: ch.voice.pitch, rate: ch.voice.rate }); }));
         break;
       }
       case 'song': {
         const songs = P.audio.songList();
         pane.appendChild(row('Walk-on song', select(ch.song.type === 'custom' ? 'custom' : ch.song.id, songs.map(s => [s.id, s.name]).concat([['custom', '🎵 Custom (uploaded / URL)']]), v => { if (v === 'custom') { ch.song.type = 'custom'; } else { ch.song.type = 'builtin'; ch.song.id = v; } })));
         pane.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Preview song', () => { P.audio.init(); P.audio.playCharSong(ch); }), btn('⏹ Stop', () => P.audio.stopSong())]));
-        const file = el('input', { type: 'file', accept: 'audio/*', onchange: (e) => { const f = e.target.files[0]; if (!f) return; if (f.size > 4 * 1024 * 1024) { alert('Keep songs under 4MB (they are stored in your browser). Trim it to the good 20 seconds.'); return; } const rd = new FileReader(); rd.onload = () => { ch.song = { type: 'custom', id: ch.song.id, custom: rd.result, name: f.name }; B.refresh(); }; rd.readAsDataURL(f); } });
-        pane.appendChild(row('Upload your own (mp3/ogg/wav, <4MB)', file, ch.song.custom && ch.song.type === 'custom' ? `Loaded: ${ch.song.name || 'custom audio'}` : 'Stored in your browser only.'));
-        pane.appendChild(row('...or paste a direct audio URL', text(ch.song.custom && ch.song.custom.startsWith('http') ? ch.song.custom : '', v => { if (v) ch.song = { type: 'custom', id: ch.song.id, custom: v, name: v.split('/').pop() }; }, 'https://example.com/song.mp3')));
+        pane.appendChild(el('hr'));
+        pane.appendChild(el('p', { class: 'help', html: `<b>Your own song.</b> Upload any length of audio, then pick the best <b>${B.SNIP_MAX} seconds</b> with the waveform editor. Only the snippet is saved (in your browser, with this fighter).` }));
+        pane.appendChild(row('Upload audio (mp3/ogg/wav/m4a)', el('input', { type: 'file', accept: 'audio/*', onchange: (e) => B.loadSong(e) })));
+        pane.appendChild(row('...or paste a direct audio URL', el('div', { class: 'inline' }, [el('input', { type: 'text', id: 'song-url', placeholder: 'https://example.com/song.mp3' }), btn('Fetch', () => { const u = document.getElementById('song-url').value.trim(); if (u) B.loadSongUrl(u); })]), 'The server must allow cross-origin audio (many do not). Uploading a file always works.'));
+        pane.appendChild(B.snippetEditor(ch));
         pane.appendChild(el('hr'));
         pane.appendChild(btn('🎤 Preview full walk-on (song + announcer)', () => B.previewEntrance(), 'primary'));
         break;
@@ -132,9 +139,46 @@ window.P = window.P || {};
         }
         break;
       }
+      case 'rig': { const box = el('div'); pane.appendChild(box); P.rig.editor(box, ch, () => { }); break; }
     }
     B.drawThumbs();
   };
+  B.SNIP_MAX = 20;
+  B.loadSong = (e) => { const f = e.target.files[0]; if (!f) return; f.arrayBuffer().then(B.decodeSong).catch(() => alert('Could not decode that audio file.')); e.target.value = ''; };
+  B.loadSongUrl = (u) => fetch(u).then(r => r.arrayBuffer()).then(B.decodeSong).catch(() => alert('Could not fetch that URL (the server probably blocks cross-origin audio). Download it and upload the file instead.'));
+  B.decodeSong = async (ab) => {
+    const buf = await P.audio.decode(ab); B.snip = { buffer: buf, dur: buf.duration, start: 0, len: Math.min(B.SNIP_MAX, buf.duration), saved: false }; B.refresh();
+  };
+  B.snippetEditor = (ch) => {
+    const wrap = el('div', { class: 'wave' });
+    const s = B.snip;
+    if (!s) { if (ch.song.type === 'custom' && ch.song.custom) wrap.appendChild(el('div', { class: 'muted', html: `Current custom snippet: <b>${U.esc(ch.song.name || 'custom audio')}</b> (${ch.song.len ? ch.song.len.toFixed(1) + 's' : 'trimmed'}). Upload a file to pick a new snippet.` })); else wrap.appendChild(el('div', { class: 'muted', text: 'No custom audio loaded yet.' })); return wrap; }
+    const cv = el('canvas', { width: 800, height: 140, class: 'wavecv' }); wrap.appendChild(cv);
+    const info = el('div', { class: 'muted' }); wrap.appendChild(info);
+    const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height; const data = s.buffer.getChannelData(0);
+    const peaks = []; const per = Math.max(1, Math.floor(data.length / W)); for (let x = 0; x < W; x++) { let mx = 0; const o = x * per; for (let i = 0; i < per; i += 4) { const v = Math.abs(data[o + i] || 0); if (v > mx) mx = v; } peaks.push(mx); }
+    const px = (sec) => sec / s.dur * W, sec = (x) => x / W * s.dur;
+    const draw = () => {
+      ctx.fillStyle = '#222'; ctx.fillRect(0, 0, W, H);
+      const x0 = px(s.start), x1 = px(s.start + s.len);
+      ctx.fillStyle = '#3a7bd5'; ctx.fillRect(x0, 0, x1 - x0, H);
+      for (let x = 0; x < W; x++) { const h = peaks[x] * (H - 10); ctx.fillStyle = x >= x0 && x <= x1 ? '#ffd23f' : '#777'; ctx.fillRect(x, H / 2 - h / 2, 1, Math.max(1, h)); }
+      ctx.fillStyle = '#fff'; ctx.fillRect(x0 - 3, 0, 6, H); ctx.fillRect(x1 - 3, 0, 6, H);
+      if (B.snipPlayhead != null) { ctx.fillStyle = '#5f5'; ctx.fillRect(px(B.snipPlayhead), 0, 2, H); }
+      info.textContent = `Track: ${s.dur.toFixed(1)}s · Snippet: ${s.start.toFixed(1)}s → ${(s.start + s.len).toFixed(1)}s (${s.len.toFixed(1)}s, max ${B.SNIP_MAX}s). Drag the window to move it, drag its edges to resize.`;
+    };
+    let drag = null;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return (t.clientX - r.left) * W / r.width; };
+    const down = (e) => { const x = pos(e), x0 = px(s.start), x1 = px(s.start + s.len); if (Math.abs(x - x0) < 12) drag = { kind: 'l' }; else if (Math.abs(x - x1) < 12) drag = { kind: 'r' }; else if (x > x0 && x < x1) drag = { kind: 'm', off: sec(x) - s.start }; else { s.start = U.clamp(sec(x) - s.len / 2, 0, s.dur - s.len); drag = { kind: 'm', off: s.len / 2 }; } draw(); e.preventDefault(); };
+    const move = (e) => { if (!drag) return; const t = sec(pos(e)); if (drag.kind === 'm') s.start = U.clamp(t - drag.off, 0, s.dur - s.len); else if (drag.kind === 'l') { const end = s.start + s.len; s.start = U.clamp(t, Math.max(0, end - B.SNIP_MAX), end - 1); s.len = end - s.start; } else { s.len = U.clamp(t - s.start, 1, Math.min(B.SNIP_MAX, s.dur - s.start)); } draw(); e.preventDefault(); };
+    const up = () => { drag = null; };
+    cv.addEventListener('mousedown', down); cv.addEventListener('mousemove', move); window.addEventListener('mouseup', up); cv.addEventListener('touchstart', down, { passive: false }); cv.addEventListener('touchmove', move, { passive: false }); cv.addEventListener('touchend', up);
+    const play = () => { B.stopSnip(); const ac = P.audio.init(); const src = ac.createBufferSource(); src.buffer = s.buffer; const g = ac.createGain(); g.gain.value = P.audio.settings.music; src.connect(g); g.connect(ac.destination); src.start(0, s.start, s.len); const t0 = ac.currentTime; B.snipSrc = src; const tick = () => { if (B.snipSrc !== src) return; B.snipPlayhead = s.start + (ac.currentTime - t0); if (B.snipPlayhead > s.start + s.len) { B.snipPlayhead = null; B.snipSrc = null; } draw(); if (B.snipSrc) requestAnimationFrame(tick); }; tick(); src.onended = () => { if (B.snipSrc === src) { B.snipSrc = null; B.snipPlayhead = null; draw(); } }; };
+    wrap.appendChild(el('div', { class: 'btnrow' }, [btn('▶ Play snippet', play), btn('⏹ Stop', B.stopSnip), btn(s.saved ? '✓ Saved as walk-on' : '💾 Use this snippet as walk-on song', async () => { const url = await P.audio.snippetToWav(s.buffer, s.start, s.len); ch.song = { type: 'custom', id: ch.song.id, custom: url, name: 'your snippet', len: s.len }; s.saved = true; B.refresh(); }, 'primary')]));
+    draw();
+    return wrap;
+  };
+  B.stopSnip = () => { if (B.snipSrc) { try { B.snipSrc.stop(); } catch (e) { } B.snipSrc = null; B.snipPlayhead = null; } };
   B.loadPng = (e, slot, key) => { const f = e.target.files[0]; if (!f) return; if (f.size > 1.5 * 1024 * 1024) { alert('Keep PNGs under 1.5MB; they live in your browser storage.'); return; } const rd = new FileReader(); rd.onload = () => { B.ch.custom[slot] = B.ch.custom[slot] || {}; B.ch.custom[slot][key] = rd.result; delete P.items.imgCache[rd.result]; B.refresh(); }; rd.readAsDataURL(f); };
   B.downloadTemplate = (slot) => {
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512; const ctx = cv.getContext('2d'); const D = P.draw;
@@ -151,13 +195,13 @@ window.P = window.P || {};
   };
   B.previewEntrance = () => {
     const ch = B.ch; P.audio.init(); P.audio.playCharSong(ch); B.previewAnim = 'walk';
-    P.audio.say(P.char.introSpeech(ch, 1), { pitch: 0.6, rate: 1.05 }).then(() => P.audio.say(ch.catchphrase, { pitch: ch.voice.pitch, rate: ch.voice.rate, interrupt: false })).then(() => { B.previewAnim = 'taunt'; setTimeout(() => { P.audio.stopSong(); B.previewAnim = 'idle'; }, 2500); });
+    P.voice.stop(); P.voice.say(P.data.ANN.intro(ch, 1), { role: 'ann', priority: 3 }).then(() => P.voice.say(ch.catchphrase, { role: 'fighter', priority: 3, pitch: ch.voice.pitch, rate: ch.voice.rate })).then(() => { B.previewAnim = 'taunt'; setTimeout(() => { P.audio.stopSong(); B.previewAnim = 'idle'; }, 2500); });
   };
   B.save = () => {
     if (!B.ch.name.trim()) B.ch.name = C.randomName();
-    P.app.upsert(B.ch); B.stopPreview(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster');
+    P.app.upsert(B.ch); B.stopPreview(); B.stopSnip(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster');
   };
-  B.cancel = () => { B.stopPreview(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster'); };
+  B.cancel = () => { B.stopPreview(); B.stopSnip(); P.audio.stopSong(); P.audio.shutUp(); P.app.show('roster'); };
   B.randomize = () => { const keepName = B.ch.name; B.ch = C.random(); if (keepName) B.ch.name = keepName; B.refresh(); };
   B.setAnim = (a) => { B.previewAnim = a; };
 })();
