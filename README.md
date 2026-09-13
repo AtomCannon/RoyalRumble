@@ -4,10 +4,25 @@
 
 ## Play
 
-No build step, no dependencies. Either:
+No build step, no dependencies.
 
-* open `index.html` in a browser (Chrome/Edge/Firefox/Safari), or
-* serve the folder (`python3 -m http.server`) / enable GitHub Pages on this repo. Serving over HTTP also enables PNG item packs (see below).
+* **Quickest:** open `index.html` in a browser (Chrome/Edge/Firefox/Safari).
+* **Best, and what you want for a party:** run the host — `node server.js`, or double-click `start-host.command` (macOS/Linux) or `start-host.bat` (Windows) — and open the address it prints. Fighters then save to a `data/` folder on your computer with no size limit, and anyone on your network can open the same page and build fighters straight into your roster. See [HOSTING.md](HOSTING.md).
+
+## Where your fighters are saved
+
+Uploaded drawings, trimmed songs and recorded voice lines are big, and the simplest browser storage only
+holds about 5MB, which fills up after a handful of fighters. So the game picks the roomiest place available
+and tells you which one it used under **💾 Storage**:
+
+| Where | Room | When it is used |
+| --- | --- | --- |
+| Your computer, via `node server.js` | No practical limit | Whenever the host is running |
+| The browser's own database (IndexedDB) | Hundreds of MB | Opened from disk or any static host |
+| Basic browser storage | ~5MB | Only if the other two are blocked |
+
+Anything saved under the old 5MB limit is moved up automatically the first time you open the game. Use
+**Export my fighters** for a backup you can keep or hand to someone else.
 
 Click 🎙 **Voices** in the header to pick the announcer and commentator voices (see *Voices* below).
 
@@ -34,6 +49,8 @@ Space pauses. `1`, `2`, `4` set speed. `S` skips the pre-show. "Next now" skips 
 index.html          the whole UI
 css/style.css
 js/util.js          helpers
+js/store.js         picks where data lives: host server, IndexedDB, or localStorage
+server.js           the optional local host (no dependencies)
 js/data/            taglines, personas, moves + commentary lines
 js/items/           item system core, built-in art (vector, drawn in the same 512 space as PNGs), manifest loader
 js/character.js     character schema, random generator, default roster lives in app.js

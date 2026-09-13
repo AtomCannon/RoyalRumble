@@ -20,6 +20,7 @@
       <label title="Music">🎵 <input type="range" id="vol-music" min="0" max="1" step="0.05"></label>
       <label title="Sound effects">💥 <input type="range" id="vol-sfx" min="0" max="1" step="0.05"></label>
       <button class="btn small" onclick="P.app.openVoices()" title="Announcer and commentator voices">🎙 Voices</button>
+      <button class="btn small" id="store-btn" onclick="P.app.openStorage()" title="Where your fighters are saved">💾 Storage</button>
       <button class="btn small" id="admin-btn" onclick="P.app.promptAdmin()" title="Admin mode is needed to start a rumble">🔒 Admin</button>
     </div>
   </nav>
@@ -161,6 +162,13 @@
   </div>
 </section>
 
+<div id="storage-modal" class="overlay" onclick="if(event.target===this)this.classList.remove('on')">
+  <div class="winbox modalbox">
+    <div class="modalhead"><h2>💾 Storage</h2><button class="btn small" onclick="document.getElementById('storage-modal').classList.remove('on')">✕ Close</button></div>
+    <div id="storage-body" class="modalbody"></div>
+  </div>
+</div>
+
 <div id="voice-modal" class="overlay" onclick="if(event.target===this)this.classList.remove('on')">
   <div class="winbox modalbox">
     <div class="modalhead"><h2>🎙 Voices</h2><button class="btn small" onclick="document.getElementById('voice-modal').classList.remove('on')">✕ Close</button></div>
@@ -169,6 +177,7 @@
 </div>
 
 <script src="js/util.js"></script>
+<script src="js/store.js"></script>
 <script src="js/data/taglines.js"></script>
 <script src="js/data/personas.js"></script>
 <script src="js/data/commentary.js"></script>

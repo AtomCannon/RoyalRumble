@@ -31,7 +31,19 @@ window.P = window.P || {};
   };
 
   // ---- roster storage ----
-  App.saveRoster = () => { if (!U.save('punchma.roster', App.roster)) alert('Could not save: browser storage is full. Custom drawings, jingles and voice lines take space. Export your fighters, then remove a few.'); };
+  let saveT = null;
+  App.saveRoster = () => {                       // debounced so a burst of edits is one write
+    clearTimeout(saveT);
+    saveT = setTimeout(() => {
+      P.store.set('roster', App.roster).then(r => { if (!r.ok) App.toast('Could not save the roster: ' + r.error, true); });
+    }, 120);
+  };
+  App.toast = (msg, bad) => {
+    let el2 = document.getElementById('toast');
+    if (!el2) { el2 = el('div', { id: 'toast', class: 'toast' }); document.body.appendChild(el2); }
+    el2.textContent = msg; el2.className = 'toast on' + (bad ? ' bad' : '');
+    clearTimeout(App.toastT); App.toastT = setTimeout(() => el2.className = 'toast', bad ? 9000 : 2600);
+  };
   App.custom = () => App.roster.filter(c => !c.builtin);
   App.upsert = (ch) => { const i = App.roster.findIndex(c => c.id === ch.id); if (i >= 0) App.roster[i] = ch; else App.roster.push(ch); App.selected.add(ch.id); App.saveRoster(); };
   App.remove = (id) => { App.roster = App.roster.filter(c => c.id !== id); App.selected.delete(id); App.saveRoster(); App.renderRoster(); };
@@ -269,14 +281,39 @@ window.P = window.P || {};
     return out;
   };
 
-  App.init = () => {
-    P.sponsors.load();
-    const saved = U.load('punchma.roster', null);
-    App.roster = saved ? App.migrate(saved) : App.defaults();
-    if (saved) App.saveRoster();
-    App.selected = new Set(App.roster.map(c => c.id));
-    if (!saved) App.saveRoster();
+  // ---- where the data lives ----
+  App.storageUI = async () => {
+    const box = document.getElementById('storage-body'); if (!box) return;
+    box.innerHTML = ''; box.appendChild(el('p', { class: 'muted', text: 'Checking...' }));
+    const u = await P.store.usage();
+    const names = { server: 'This computer (the Punchma host)', idb: "This browser's database", local: 'Basic browser storage' };
+    box.innerHTML = '';
+    box.appendChild(el('h3', { text: names[u.backend] || u.backend }));
+    box.appendChild(el('p', { text: u.note }));
+    if (u.quota) { const pct = Math.min(100, u.bytes / u.quota * 100); box.appendChild(el('div', { class: 'meter' }, [el('i', { style: `width:${Math.max(1, pct)}%;background:${pct > 85 ? '#f55' : pct > 60 ? '#ffd23f' : '#5f5'}` })])); }
+    box.appendChild(el('p', { class: 'muted', text: u.quota ? `About ${P.store.fmt(u.bytes)} used of roughly ${P.store.fmt(u.quota)} available.` : `About ${P.store.fmt(u.bytes)} of fighters and sponsors saved. No practical limit.` }));
+    const big = App.roster.map(c => ({ name: c.name || 'Unnamed', bytes: JSON.stringify(c).length })).sort((a, b) => b.bytes - a.bytes).slice(0, 6);
+    if (big.length) { box.appendChild(el('h3', { text: 'Biggest fighters' })); box.appendChild(el('ul', { class: 'sizes' }, big.map(b => el('li', { text: `${b.name} — ${P.store.fmt(b.bytes)}` })))); }
+    if (u.backend !== 'server') box.appendChild(el('div', { class: 'help', html: 'Uploaded drawings, song snippets and voice lines are what fill this up. To get rid of the limit completely, run the host on your computer:<br><code>node server.js</code><br>then open the address it prints. Everything then saves into the <code>data/</code> folder next to the game, and anyone on your network can open the same page and build fighters straight into your roster. See the README for details.' }));
+    else box.appendChild(el('div', { class: 'help', html: 'Fighters and sponsors are saved as JSON files in the <code>data/</code> folder next to the game. Copy that folder to back it up. Anyone on your network who opens this page shares this roster; only admin can start a rumble.' }));
+    box.appendChild(el('div', { class: 'btnrow' }, [
+      el('button', { class: 'btn', text: '⬇ Export my fighters (backup)', onclick: () => App.exportRoster() }),
+      el('button', { class: 'btn small', text: '↻ Recheck', onclick: () => App.storageUI() }),
+    ]));
+  };
+  App.openStorage = () => { document.getElementById('storage-modal').classList.add('on'); App.storageUI(); };
+
+  App.init = async () => {
     if (sessionStorage.getItem('punchma.admin') === '1') P.admin.on = true;
+    const backend = await P.store.init();
+    const badge = document.getElementById('store-btn');
+    if (badge) badge.title = P.store.note;
+    if (backend === 'local') setTimeout(() => App.toast('Using basic browser storage, which is small. Click Storage to see how to lift the limit.', true), 1200);
+    await P.sponsors.load();
+    const saved = await P.store.get('roster', null);
+    App.roster = saved ? App.migrate(saved) : App.defaults();
+    App.selected = new Set(App.roster.map(c => c.id));
+    App.saveRoster();
     App.audioUI();
     const iv = document.getElementById('set-interval'); if (iv) iv.oninput = (e) => document.getElementById('set-interval-v').textContent = e.target.value + 's';
     const hp = document.getElementById('set-hp'); if (hp) hp.oninput = (e) => document.getElementById('set-hp-v').textContent = e.target.value;

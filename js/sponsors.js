@@ -11,8 +11,8 @@ window.P = window.P || {};
     logo: null, commercial: ['', '', ''], voice: 'ann', music: { type: 'builtin', id: 'jingle', custom: null, name: '', len: 0 },
     spots: { mat: true, apron: true, turnbuckle: false, banner: true, screen: true },
   });
-  S.load = () => { S.list = (U.load('punchma.sponsors', null) || S.defaults()).map(s => U.merge(S.blank(), s)); };
-  S.save = () => { if (!U.save('punchma.sponsors', S.list)) alert('Could not save sponsors: browser storage is full. Remove a logo or a jingle.'); };
+  S.load = async () => { const saved = await P.store.get('sponsors', null); S.list = (saved || S.defaults()).map(s => U.merge(S.blank(), s)); };
+  S.save = () => P.store.set('sponsors', S.list).then(r => { if (!r.ok) P.app.toast('Could not save sponsors: ' + r.error, true); else P.app.toast('Sponsors saved.'); });
   S.get = (id) => S.list.find(s => s.id === id);
   S.defaults = () => [
     { id: 'sp_gristle', name: "Gristle's Meat Barn", tagline: 'Meat. In a barn. What else do you want?', shape: 'badge', color: '#8b2c2c', color2: '#ffd23f', text: 'GMB',
